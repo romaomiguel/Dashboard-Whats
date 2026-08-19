@@ -4,85 +4,62 @@ import {
   Contact,
   Home,
   Image as ImageIcon,
+  Link2,
   MessageCircle,
+  MessageSquareText,
   Send,
   Settings,
-  Link2,
-  MessageSquareText,
+  type LucideIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
-import { summary } from '@/lib/data'
 
-type NavItem = {
-  id: string
+export type ItemNav = {
+  href: string
   label: string
-  icon: typeof Home
-  count?: number
+  icon: LucideIcon
+  secao: 'principal' | 'sistema'
 }
 
-const mainNav: NavItem[] = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'conexao', label: 'Conexão', icon: Link2 },
-  { id: 'contatos', label: 'Contatos', icon: Contact, count: summary.contatos },
-  { id: 'mensagens', label: 'Mensagens', icon: MessageCircle, count: summary.mensagens },
-  { id: 'midias', label: 'Mídias', icon: ImageIcon },
+export const ITENS_NAV: ItemNav[] = [
+  { href: '/', label: 'Home', icon: Home, secao: 'principal' },
+  { href: '/conexao', label: 'Conexão', icon: Link2, secao: 'principal' },
+  { href: '/contatos', label: 'Contatos', icon: Contact, secao: 'principal' },
+  { href: '/mensagens', label: 'Mensagens', icon: MessageCircle, secao: 'principal' },
+  { href: '/midias', label: 'Mídias', icon: ImageIcon, secao: 'principal' },
+  { href: '/configuracoes', label: 'Configurações', icon: Settings, secao: 'sistema' },
+  { href: '/disparos', label: 'Disparos', icon: Send, secao: 'sistema' },
 ]
 
-const secondaryNav: NavItem[] = [
-  { id: 'configuracoes', label: 'Configurações', icon: Settings },
-  { id: 'disparos', label: 'Disparos', icon: Send },
-]
-
-function formatCount(n: number) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1).replace('.0', '')}k`
-  return String(n)
-}
-
-function NavButton({
-  item,
-  active,
-  onClick,
-}: {
-  item: NavItem
-  active: boolean
-  onClick: () => void
-}) {
+function LinkNav({ item, ativo }: { item: ItemNav; ativo: boolean }) {
   const Icon = item.icon
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
+    <Link
+      href={item.href}
+      aria-current={ativo ? 'page' : undefined}
       className={cn(
         'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-        active
+        ativo
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
       )}
     >
       <Icon className="size-[18px] shrink-0" />
       <span className="flex-1 text-left">{item.label}</span>
-      {typeof item.count === 'number' && (
-        <Badge
-          variant="secondary"
-          className={cn(
-            'min-w-6 justify-center rounded-full px-1.5 font-mono text-[11px] tabular-nums',
-            active
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground',
-          )}
-        >
-          {formatCount(item.count)}
-        </Badge>
-      )}
-    </button>
+    </Link>
   )
 }
 
 export function Sidebar() {
-  const [active, setActive] = useState('home')
+  const caminho = usePathname()
+
+  // Comparação exata: startsWith deixaria a Home sempre ativa.
+  const ehAtivo = (href: string) =>
+    href === '/' ? caminho === '/' : caminho === href || caminho.startsWith(`${href}/`)
+
+  const principais = ITENS_NAV.filter((i) => i.secao === 'principal')
+  const sistema = ITENS_NAV.filter((i) => i.secao === 'sistema')
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
@@ -100,13 +77,8 @@ export function Sidebar() {
         <p className="px-3 pb-2 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Menu principal
         </p>
-        {mainNav.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            active={active === item.id}
-            onClick={() => setActive(item.id)}
-          />
+        {principais.map((item) => (
+          <LinkNav key={item.href} item={item} ativo={ehAtivo(item.href)} />
         ))}
 
         <div className="my-4 h-px bg-sidebar-border" />
@@ -114,26 +86,10 @@ export function Sidebar() {
         <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Sistema
         </p>
-        {secondaryNav.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            active={active === item.id}
-            onClick={() => setActive(item.id)}
-          />
+        {sistema.map((item) => (
+          <LinkNav key={item.href} item={item} ativo={ehAtivo(item.href)} />
         ))}
       </nav>
-
-      <div className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5">
-          <span className="flex size-2 items-center justify-center">
-            <span className="size-2 animate-pulse rounded-full bg-primary" />
-          </span>
-          <p className="text-xs text-muted-foreground">
-            {summary.conexoesAtivas} de {summary.conexoesTotal} conexões online
-          </p>
-        </div>
-      </div>
     </aside>
   )
 }

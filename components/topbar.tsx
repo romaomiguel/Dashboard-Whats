@@ -1,12 +1,11 @@
-'use client'
-
 import { Bell, Search, Send } from 'lucide-react'
+import { sair } from '@/app/login/actions'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/theme-toggle'
 
-export function Topbar() {
+export function Topbar({ email }: { email: string }) {
   return (
     <header className="flex flex-col gap-4 border-b border-border bg-background/80 px-6 py-4 backdrop-blur md:flex-row md:items-center md:justify-between">
       <div>
@@ -45,17 +44,24 @@ export function Topbar() {
 
         <ThemeToggle />
 
-        <div className="flex items-center gap-2 pl-1">
+        <form action={sair} className="flex items-center gap-2 pl-1">
           <Avatar className="size-9">
             <AvatarFallback className="bg-primary/15 text-sm font-medium text-primary">
-              LW
+              {email.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="hidden leading-tight lg:block">
-            <p className="text-sm font-medium text-foreground">Leslie Watson</p>
-            <p className="text-xs text-muted-foreground">Admin</p>
+            <p className="max-w-40 truncate text-sm font-medium text-foreground">
+              {email}
+            </p>
+            <button
+              type="submit"
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            >
+              Sair
+            </button>
           </div>
-        </div>
+        </form>
       </div>
     </header>
   )
