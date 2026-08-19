@@ -90,6 +90,11 @@ describe('chamar', () => {
     await expect(chamar('/qualquer')).rejects.toMatchObject({ kind: 'rede' })
   })
 
+  it('classifica timeout (AbortError) como erro de rede', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError')))
+    await expect(chamar('/qualquer')).rejects.toMatchObject({ kind: 'rede' })
+  })
+
   it('classifica resposta que não é JSON', async () => {
     vi.stubGlobal(
       'fetch',

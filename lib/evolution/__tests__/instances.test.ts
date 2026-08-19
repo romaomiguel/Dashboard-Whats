@@ -82,7 +82,7 @@ describe('operações de instância', () => {
 
   it('estadoInstancia devolve close quando a instância sumiu', async () => {
     fetchFalso.mockResolvedValue(respostaJson({}, 404))
-    await expect(estadoInstancia('inst_sumida')).resolves.toBe('close')
+    await expect(estadoInstancia('inst_99999999')).resolves.toBe('close')
   })
 
   it('estadoInstancia propaga erro que não seja 404', async () => {
@@ -103,6 +103,6 @@ describe('operações de instância', () => {
 
   it('removerInstancia é idempotente diante de 404', async () => {
     fetchFalso.mockResolvedValue(respostaJson({}, 404))
-    await expect(removerInstancia('inst_ja_removida')).resolves.toBeUndefined()
+    await expect(removerInstancia('inst_77777777')).resolves.toBeUndefined()
   })
 })
