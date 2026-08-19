@@ -1,6 +1,9 @@
 'use client'
 
+import { BarChart3 } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { useDadosExemplo } from '@/components/dados-exemplo-provider'
+import { EstadoVazio } from '@/components/estado-vazio'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   ChartContainer,
@@ -24,6 +27,8 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function MessagesBarChart() {
+  const { mostrarExemplo } = useDadosExemplo()
+
   return (
     <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -41,35 +46,43 @@ export function MessagesBarChart() {
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[280px] w-full">
-          <BarChart data={weeklyMessages} barGap={6}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" />
-            <XAxis
-              dataKey="dia"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={10}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              width={40}
-            />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <ChartLegend content={<ChartLegendContent />} />
-            <Bar
-              dataKey="enviadas"
-              fill="var(--color-enviadas)"
-              radius={[6, 6, 0, 0]}
-            />
-            <Bar
-              dataKey="recebidas"
-              fill="var(--color-recebidas)"
-              radius={[6, 6, 0, 0]}
-            />
-          </BarChart>
-        </ChartContainer>
+        {mostrarExemplo ? (
+          <ChartContainer config={chartConfig} className="h-[280px] w-full">
+            <BarChart data={weeklyMessages} barGap={6}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis
+                dataKey="dia"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={10}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                width={40}
+              />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Bar
+                dataKey="enviadas"
+                fill="var(--color-enviadas)"
+                radius={[6, 6, 0, 0]}
+              />
+              <Bar
+                dataKey="recebidas"
+                fill="var(--color-recebidas)"
+                radius={[6, 6, 0, 0]}
+              />
+            </BarChart>
+          </ChartContainer>
+        ) : (
+          <EstadoVazio
+            icone={BarChart3}
+            titulo="Sem mensagens ainda"
+            descricao="Conecte seu WhatsApp em Conexão para começar a registrar o volume diário."
+          />
+        )}
       </CardContent>
     </Card>
   )

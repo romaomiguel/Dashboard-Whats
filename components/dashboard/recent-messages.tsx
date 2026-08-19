@@ -1,4 +1,8 @@
-import { Check, CheckCheck } from 'lucide-react'
+'use client'
+
+import { Check, CheckCheck, MessageCircle } from 'lucide-react'
+import { useDadosExemplo } from '@/components/dados-exemplo-provider'
+import { EstadoVazio } from '@/components/estado-vazio'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,6 +32,8 @@ function StatusIcon({ status }: { status: Mensagem['status'] }) {
 }
 
 export function RecentMessages() {
+  const { mostrarExemplo } = useDadosExemplo()
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -36,40 +42,48 @@ export function RecentMessages() {
           <p className="text-sm text-muted-foreground">Conversas ativas</p>
         </div>
         <Badge variant="secondary" className="rounded-full">
-          {mensagensRecentes.length} conversas
+          {mostrarExemplo ? mensagensRecentes.length : 0} conversas
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col divide-y divide-border">
-        {mensagensRecentes.map((m) => (
-          <div key={m.numero} className="flex items-center gap-3 py-3 first:pt-0">
-            <Avatar className="size-10">
-              <AvatarFallback className="bg-primary/12 text-xs font-medium text-primary">
-                {initials(m.contato)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {m.contato}
-                </p>
-                <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                  {m.hora}
-                </span>
+        {mostrarExemplo ? (
+          mensagensRecentes.map((m) => (
+            <div key={m.numero} className="flex items-center gap-3 py-3 first:pt-0">
+              <Avatar className="size-10">
+                <AvatarFallback className="bg-primary/12 text-xs font-medium text-primary">
+                  {initials(m.contato)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {m.contato}
+                  </p>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                    {m.hora}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <StatusIcon status={m.status} />
+                  <p className="truncate text-sm text-muted-foreground">
+                    {m.previa}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <StatusIcon status={m.status} />
-                <p className="truncate text-sm text-muted-foreground">
-                  {m.previa}
-                </p>
-              </div>
+              {m.naoLidas > 0 && (
+                <Badge className="size-5 justify-center rounded-full p-0 font-mono text-[11px] tabular-nums">
+                  {m.naoLidas}
+                </Badge>
+              )}
             </div>
-            {m.naoLidas > 0 && (
-              <Badge className="size-5 justify-center rounded-full p-0 font-mono text-[11px] tabular-nums">
-                {m.naoLidas}
-              </Badge>
-            )}
-          </div>
-        ))}
+          ))
+        ) : (
+          <EstadoVazio
+            icone={MessageCircle}
+            titulo="Nenhuma conversa"
+            descricao="Conecte seu WhatsApp para ver suas conversas aqui."
+          />
+        )}
       </CardContent>
     </Card>
   )
