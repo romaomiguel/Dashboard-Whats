@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { criarClienteServidor } from '@/lib/supabase/server'
+import { destinoSeguro } from './utils'
 
 export type EstadoLogin = { erro?: string }
 
@@ -27,7 +28,7 @@ export async function entrar(
   if (error) return { erro: 'E-mail ou senha inválidos.' }
 
   const destino = String(formData.get('destino') ?? '/')
-  redirect(destino.startsWith('/') ? destino : '/')
+  redirect(destinoSeguro(destino))
 }
 
 export async function sair() {
