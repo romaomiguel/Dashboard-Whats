@@ -1,12 +1,17 @@
 export function destinoSeguro(destino: string): string {
-  // Rejeita caminhos que começam com //, /\, ou contêm esquema URL
-  if (
-    destino.startsWith('//') ||
-    destino.startsWith('/\\') ||
-    destino.includes('://')
-  ) {
+  // Deve ser uma string não-vazia
+  if (!destino) return '/'
+
+  // Deve começar com / (evita caminhos relativos)
+  if (!destino.startsWith('/')) return '/'
+
+  try {
+    const base = 'http://localhost'
+    const url = new URL(destino, base)
+    // Se o destino escapou para outra origem, descarta.
+    if (url.origin !== base) return '/'
+    return url.pathname + url.search + url.hash
+  } catch {
     return '/'
   }
-  // Aceita apenas caminhos internos (começam com /)
-  return destino.startsWith('/') ? destino : '/'
 }
