@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: evolution-api
+    runtime: image
+    image:
+      url: docker.io/atendai/evolution-api:v2.2.3
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: SERVER_URL
+        sync: false
+      - key: AUTHENTICATION_API_KEY
+        generateValue: true
+      - key: DATABASE_ENABLED
+        value: "true"
+      - key: DATABASE_PROVIDER
+        value: postgresql
+      - key: DATABASE_CONNECTION_URI
+        sync: false
+      - key: DATABASE_CONNECTION_CLIENT_NAME
+        value: evolution
+      - key: DATABASE_SAVE_DATA_INSTANCE
+        value: "true"
+      - key: DATABASE_SAVE_DATA_NEW_MESSAGE
+        value: "true"
+      - key: DATABASE_SAVE_MESSAGE_UPDATE
+        value: "true"
+      - key: DATABASE_SAVE_DATA_CONTACTS
+        value: "true"
+      - key: DATABASE_SAVE_DATA_CHATS
+        value: "true"
+      - key: CACHE_REDIS_ENABLED
+        value: "false"
+      - key: CACHE_LOCAL_ENABLED
+        value: "true"
+      - key: CONFIG_SESSION_PHONE_CLIENT
+        value: ZapCRM
+      - key: CONFIG_SESSION_PHONE_NAME
+        value: Chrome
+      - key: WEBHOOK_GLOBAL_ENABLED
+        value: "false"
+      - key: LOG_LEVEL
+        value: ERROR
