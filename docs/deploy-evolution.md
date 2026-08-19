@@ -9,7 +9,7 @@ De Settings > Database, anotar a **Connection string** (modo Session, porta 5432
 ## 2. Criar o serviço no Render
 
 Em render.com: New > Web Service > Existing image.
-Imagem: `docker.io/atendai/evolution-api:v2.2.3`. Plano: Free.
+Imagem: `docker.io/evoapicloud/evolution-api:v2.3.7`. Plano: Free.
 
 Variáveis: copiar as do `render.yaml`. Preencher à mão:
 - `DATABASE_CONNECTION_URI` — a connection string do Supabase
