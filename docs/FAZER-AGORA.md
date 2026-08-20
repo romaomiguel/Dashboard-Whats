@@ -233,9 +233,35 @@ do upstream, não da configuração.
 
 ## Passo 5 — Opcional: testar as duas variáveis de mensagem
 
-`DATABASE_SAVE_MESSAGE_UPDATE` é o maior gerador de linhas: cria uma para cada
-mudança de status de cada mensagem. Mas não confirmei se desligá-la também
-silencia o webhook, que é de onde a aba de Mensagens se alimenta.
+### O que se ganha
+
+Com `CONTACTS`, `CHATS` e `HISTORIC` já desligados, o banco não recebe mais
+despejo de histórico. O que sobra cresce com o uso:
+
+- `DATABASE_SAVE_DATA_NEW_MESSAGE` grava **uma linha por mensagem**, enviada ou
+  recebida.
+- `DATABASE_SAVE_MESSAGE_UPDATE` grava **uma linha por mudança de status** —
+  entregue, lida — de cada mensagem. É o maior gerador dos dois.
+
+Numa campanha de 3.000 contatos, isso é 3.000 linhas mais algo perto de 6.000.
+A cada campanha.
+
+### Qual é o risco
+
+A aba de Mensagens não lê o banco da Evolution: ela lê `public.mensagens`,
+preenchida pelo receptor de webhook. Os recibos de entrega e leitura também
+chegam por webhook, no evento `MESSAGES_UPDATE`.
+
+Em tese, gravar no banco e emitir evento são coisas separadas — e a
+[documentação da Evolution](https://doc.evolution-api.com/v2/en/env) trata
+essas variáveis apenas como *persistência*, numa seção chamada "Persistent
+Storage", sem mencionar webhook.
+
+Mas **isso não é prova**. Não consegui ler o código da v2.3.7 para confirmar, e
+se estiver errado o sintoma é ruim: a aba de Mensagens simplesmente para de
+receber, sem erro em lugar nenhum.
+
+### Por isso o teste
 
 1. No Render, mude as duas para `false` e salve.
 2. Mande uma mensagem de outro celular para o número conectado.
