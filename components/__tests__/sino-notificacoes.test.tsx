@@ -125,4 +125,60 @@ describe('painel', () => {
       screen.queryByRole('button', { name: /Marcar todas como lidas/ }),
     ).not.toBeInTheDocument()
   })
+
+  it('contador diminui ao marcar um item só como lido', async () => {
+    render(
+      <SinoNotificacoes
+        ownerId="user-1"
+        iniciais={[nota(), nota({ id: 'n2', titulo: 'Bruno perguntou' })]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+    expect(await screen.findByText('2')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Amanda respondeu'))
+
+    await waitFor(() => expect(screen.queryByText('2')).not.toBeInTheDocument())
+    expect(screen.getByText('1')).toBeInTheDocument()
+  })
+})
+
+describe('falha da ação', () => {
+  it('marcarComoLida falhando desfaz a marcação, mostra o erro e não navega', async () => {
+    acoes.lida.mockResolvedValue({ erro: 'Sessão expirada. Entre novamente.' })
+
+    render(<SinoNotificacoes ownerId="user-1" iniciais={[nota()]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+    await userEvent.click(await screen.findByText('Amanda respondeu'))
+
+    expect(
+      await screen.findByText('Sessão expirada. Entre novamente.'),
+    ).toBeInTheDocument()
+    // Contador continua 1: a marcação otimista foi desfeita.
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(navegacao.push).not.toHaveBeenCalled()
+  })
+
+  it('marcarTodasComoLidas falhando desfaz a marcação e mostra o erro', async () => {
+    acoes.todas.mockResolvedValue({
+      erro: 'Não foi possível marcar todas como lidas.',
+    })
+
+    render(
+      <SinoNotificacoes
+        ownerId="user-1"
+        iniciais={[nota(), nota({ id: 'n2' })]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Marcar todas como lidas/ }),
+    )
+
+    expect(
+      await screen.findByText('Não foi possível marcar todas como lidas.'),
+    ).toBeInTheDocument()
+    // Contador volta a 2: a marcação otimista foi desfeita.
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
 })

@@ -43,6 +43,7 @@ export function SinoNotificacoes({
   // Derivar em vez de copiar com useEffect é proposital: `iniciais` chega como
   // array novo a cada render, e sincronizar por efeito entraria em laço.
   const [lidasAgora, setLidasAgora] = useState<string[]>([])
+  const [erro, setErro] = useState('')
 
   const lista = iniciais.map((n) =>
     lidasAgora.includes(n.id) ? { ...n, lida: true } : n,
@@ -75,14 +76,38 @@ export function SinoNotificacoes({
   const naoLidas = lista.filter((n) => !n.lida).length
 
   async function abrir(notificacao: Notificacao) {
+    setErro('')
     setLidasAgora((atual) => [...atual, notificacao.id])
-    await marcarComoLida(notificacao.id)
+    const resultado = await marcarComoLida(notificacao.id)
+
+    if (resultado.erro) {
+      // Desfaz a marcação otimista: sem isto o item ficaria riscado na tela
+      // com o banco ainda em lida: false, e o usuário só notaria a mentira
+      // quando o servidor devolvesse a lista de novo.
+      setLidasAgora((atual) => atual.filter((id) => id !== notificacao.id))
+      setErro(resultado.erro)
+      // Não navega: se marcar como lida falhou (sessão expirada é o caso
+      // real), trocar de tela esconderia o erro atrás da navegação e daria
+      // a entender que o clique funcionou.
+      return
+    }
+
     if (notificacao.destino) router.push(notificacao.destino)
   }
 
   async function lerTodas() {
+    setErro('')
+    // Guarda o que já estava marcado antes desta chamada — se ela falhar, é
+    // isto que volta, não um array vazio, senão desfaria também leituras
+    // individuais que já tinham sido confirmadas pelo servidor.
+    const antesDaTentativa = lidasAgora
     setLidasAgora(iniciais.map((n) => n.id))
-    await marcarTodasComoLidas()
+    const resultado = await marcarTodasComoLidas()
+
+    if (resultado.erro) {
+      setLidasAgora(antesDaTentativa)
+      setErro(resultado.erro)
+    }
   }
 
   return (
@@ -116,6 +141,12 @@ export function SinoNotificacoes({
             </Button>
           )}
         </div>
+
+        {erro && (
+          <p role="alert" className="px-3 pb-2 text-sm text-destructive">
+            {erro}
+          </p>
+        )}
 
         {lista.length === 0 ? (
           <p className="px-3 pb-4 pt-2 text-center text-sm text-muted-foreground">
