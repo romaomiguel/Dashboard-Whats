@@ -2,7 +2,7 @@
 
 **Data:** 2026-08-19
 **Entrega:** 1 de 6
-**Status:** aprovada
+**Status:** entregue em 2026-08-19
 
 ## Contexto
 
