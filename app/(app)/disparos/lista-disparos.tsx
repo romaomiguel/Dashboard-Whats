@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { disparos, type Disparo } from '@/lib/data'
 import type { Etiqueta } from '@/lib/etiquetas'
+import type { Conexao } from '@/lib/conexoes'
 
 const estiloStatus: Record<Disparo['status'], string> = {
   enviando: 'bg-primary/15 text-primary',
@@ -24,7 +25,13 @@ const rotuloStatus: Record<Disparo['status'], string> = {
   rascunho: 'Rascunho',
 }
 
-export function ListaDisparos({ etiquetas }: { etiquetas: Etiqueta[] }) {
+export function ListaDisparos({
+  etiquetas,
+  conexoes,
+}: {
+  etiquetas: Etiqueta[]
+  conexoes: Conexao[]
+}) {
   const { mostrarExemplo } = useDadosExemplo()
   const lista = mostrarExemplo ? disparos : []
 
@@ -36,7 +43,7 @@ export function ListaDisparos({ etiquetas }: { etiquetas: Etiqueta[] }) {
         <p className="text-sm text-muted-foreground">
           {lista.length} campanhas de disparo
         </p>
-        <NovoDisparoDialog etiquetas={etiquetas} />
+        <NovoDisparoDialog etiquetas={etiquetas} conexoes={conexoes} />
       </div>
 
       {lista.length === 0 ? (

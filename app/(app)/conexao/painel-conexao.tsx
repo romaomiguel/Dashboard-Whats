@@ -1,259 +1,234 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useActionState, useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Loader2,
-  Plug,
-  QrCode,
-  RefreshCw,
-  Smartphone,
-  Trash2,
-} from 'lucide-react'
+import { Loader2, Plus, QrCode, Signal, Smartphone, Trash2 } from 'lucide-react'
+import { useFormStatus } from 'react-dom'
 import { EstadoVazio } from '@/components/estado-vazio'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { Conexao, StatusConexao } from '@/lib/consultas/conexao'
 import {
-  atualizarQr,
-  criarConexao,
-  removerConexao,
-  verificarConexao,
-} from './actions'
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  ESTILO_STATUS,
+  LIMITE_NOME_CONEXAO,
+  ROTULO_STATUS,
+  type Conexao,
+} from '@/lib/conexoes'
+import { criarConexao, removerConexao, type EstadoConexaoUi } from './actions'
+import { DialogoQr } from './dialogo-qr'
 
-const ESTILO_STATUS: Record<StatusConexao, string> = {
-  conectada: 'bg-primary/15 text-primary',
-  conectando: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  criada: 'bg-muted text-muted-foreground',
-  desconectada: 'bg-muted text-muted-foreground',
-}
-
-const ROTULO_STATUS: Record<StatusConexao, string> = {
-  conectada: 'Conectada',
-  conectando: 'Aguardando leitura',
-  criada: 'Criada',
-  desconectada: 'Desconectada',
-}
-
-/** O QR do WhatsApp vence em cerca de um minuto. */
-const INTERVALO_QR_MS = 50_000
-const INTERVALO_ESTADO_MS = 5_000
-
-export function PainelConexao({ conexao }: { conexao: Conexao | null }) {
-  const router = useRouter()
-  const [qr, setQr] = useState('')
-  const [erro, setErro] = useState('')
-  const [criando, setCriando] = useState(false)
-  const [removendo, setRemovendo] = useState(false)
-  const [status, setStatus] = useState<StatusConexao | null>(
-    conexao?.status ?? null,
+function BotaoCriar() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" className="gap-2" disabled={pending}>
+      {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+      {pending ? 'Criando...' : 'Criar e ler QR'}
+    </Button>
   )
-  const montado = useRef(true)
+}
+
+function NovaConexaoDialog({
+  aoCriar,
+}: {
+  aoCriar: (id: string, nome: string, qr?: string) => void
+}) {
+  const router = useRouter()
+  const [aberto, setAberto] = useState(false)
+  const [nome, setNome] = useState('')
+  const [estado, enviar] = useActionState<EstadoConexaoUi, FormData>(
+    criarConexao,
+    {},
+  )
 
   useEffect(() => {
-    montado.current = true
-    return () => {
-      montado.current = false
-    }
-  }, [])
-
-  useEffect(() => {
-    setStatus(conexao?.status ?? null)
-  }, [conexao])
-
-  const aguardandoLeitura =
-    Boolean(conexao) && status !== 'conectada' && status !== null
-
-  const pedirQr = useCallback(async () => {
-    const resultado = await atualizarQr()
-    if (!montado.current) return
-    if (resultado.erro) setErro(resultado.erro)
-    else if (resultado.qr) setQr(resultado.qr)
-  }, [])
-
-  // Enquanto o QR está na tela, dois relógios: um renova o código antes de
-  // vencer, outro pergunta à Evolution se o telefone já leu. O webhook não
-  // resolve isso em desenvolvimento — a Evolution não alcança o localhost.
-  useEffect(() => {
-    if (!aguardandoLeitura) return
-
-    if (!qr) void pedirQr()
-
-    const renovaQr = setInterval(() => void pedirQr(), INTERVALO_QR_MS)
-    const checaEstado = setInterval(async () => {
-      const resultado = await verificarConexao()
-      if (!montado.current) return
-      if (resultado.status) {
-        setStatus(resultado.status)
-        if (resultado.status === 'conectada') router.refresh()
-      }
-    }, INTERVALO_ESTADO_MS)
-
-    return () => {
-      clearInterval(renovaQr)
-      clearInterval(checaEstado)
-    }
-  }, [aguardandoLeitura, qr, pedirQr, router])
-
-  async function criar() {
-    setErro('')
-    setCriando(true)
-    try {
-      const resultado = await criarConexao()
-      if (resultado.erro) {
-        setErro(resultado.erro)
-        return
-      }
-      if (resultado.qr) setQr(resultado.qr)
-      setStatus(resultado.status ?? 'conectando')
+    if (estado.ok && estado.id) {
+      setAberto(false)
+      aoCriar(estado.id, nome, estado.qr)
+      setNome('')
       router.refresh()
-    } finally {
-      if (montado.current) setCriando(false)
     }
-  }
+    // aoCriar e nome mudam a cada render do pai; depender só do estado evita
+    // reabrir o QR a cada digitação.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado])
 
-  async function remover() {
-    setErro('')
-    setRemovendo(true)
-    try {
-      const resultado = await removerConexao()
-      if (resultado.erro) {
-        setErro(resultado.erro)
-        return
-      }
-      setQr('')
-      setStatus(null)
-      router.refresh()
-    } finally {
-      if (montado.current) setRemovendo(false)
-    }
-  }
+  return (
+    <Dialog open={aberto} onOpenChange={setAberto}>
+      <DialogTrigger render={<Button className="gap-2" />}>
+        <Plus className="size-4" />
+        Nova conexão
+      </DialogTrigger>
 
-  if (!conexao) {
-    return (
-      <>
-        {erro && (
-          <p role="alert" className="text-sm text-destructive">
-            {erro}
-          </p>
-        )}
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nova conexão</DialogTitle>
+          <DialogDescription>
+            Dê um nome ao aparelho. Em seguida você lê o QR code no WhatsApp.
+          </DialogDescription>
+        </DialogHeader>
 
-        <Card>
-          <EstadoVazio
-            icone={Smartphone}
-            titulo="Nenhuma conexão"
-            descricao="Crie uma instância e leia o QR code no WhatsApp para conectar."
-          />
-          <div className="flex flex-col items-center gap-2 pb-8">
-            <Button className="gap-2" onClick={criar} disabled={criando}>
-              {criando ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Plug className="size-4" />
-              )}
-              {criando ? 'Criando...' : 'Conectar WhatsApp'}
-            </Button>
-            {criando && (
-              <p className="max-w-xs text-center text-xs text-muted-foreground">
-                A Evolution hiberna no plano free do Render. Se estiver
-                dormindo, acordar leva até 90 segundos.
-              </p>
-            )}
+        <form action={enviar} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="conexao-nome">Nome da conexão</Label>
+            <Input
+              id="conexao-nome"
+              name="nome"
+              placeholder="Ex: Comercial 01"
+              maxLength={LIMITE_NOME_CONEXAO}
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              required
+            />
           </div>
-        </Card>
-      </>
-    )
+
+          <p className="text-xs text-muted-foreground">
+            Se a Evolution estiver hibernando no plano free do Render, acordar
+            leva até 90 segundos.
+          </p>
+
+          {estado.erro && (
+            <p role="alert" className="text-sm text-destructive">
+              {estado.erro}
+            </p>
+          )}
+
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              Cancelar
+            </DialogClose>
+            <BotaoCriar />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
+  const router = useRouter()
+  const [erro, setErro] = useState('')
+  const [removendo, iniciarRemocao] = useTransition()
+  const [qrAberto, setQrAberto] = useState<{
+    id: string
+    nome: string
+    qr?: string
+  } | null>(null)
+
+  const conectadas = conexoes.filter((c) => c.status === 'conectada').length
+
+  function remover(id: string) {
+    setErro('')
+    iniciarRemocao(async () => {
+      const resultado = await removerConexao(id)
+      if (resultado.erro) setErro(resultado.erro)
+      else router.refresh()
+    })
   }
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Signal className="size-4 text-primary" />
+          {conectadas} de {conexoes.length}{' '}
+          {conexoes.length === 1 ? 'conexão conectada' : 'conexões conectadas'}
+        </div>
+
+        <NovaConexaoDialog
+          aoCriar={(id, nome, qr) => setQrAberto({ id, nome, qr })}
+        />
+      </div>
+
       {erro && (
         <p role="alert" className="text-sm text-destructive">
           {erro}
         </p>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle className="text-base">Minha conexão</CardTitle>
-            <p className="font-mono text-xs text-muted-foreground">
-              {conexao.nomeEvolution}
-            </p>
-          </div>
-          <Badge className={ESTILO_STATUS[status ?? conexao.status]}>
-            {ROTULO_STATUS[status ?? conexao.status]}
-          </Badge>
-        </CardHeader>
+      {conexoes.length === 0 ? (
+        <Card>
+          <EstadoVazio
+            icone={Smartphone}
+            titulo="Nenhuma conexão"
+            descricao="Crie uma conexão e leia o QR code no WhatsApp para começar."
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {conexoes.map((c) => (
+            <Card key={c.id}>
+              <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                <div className="min-w-0">
+                  <CardTitle className="truncate text-base">{c.nome}</CardTitle>
+                  <p className="truncate font-mono text-xs text-muted-foreground">
+                    {c.nomeEvolution}
+                  </p>
+                </div>
+                <Badge className={ESTILO_STATUS[c.status]}>
+                  {ROTULO_STATUS[c.status]}
+                </Badge>
+              </CardHeader>
 
-        <CardContent className="flex flex-col items-center gap-4">
-          {status === 'conectada' ? (
-            <div className="flex flex-col items-center gap-2 py-6 text-center">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                <Smartphone className="size-6" />
-              </div>
-              <p className="text-sm font-medium text-foreground">
-                WhatsApp conectado
-              </p>
-              {conexao.numero && (
+              <CardContent className="flex flex-col gap-4">
                 <p className="font-mono text-sm text-muted-foreground">
-                  {conexao.numero}
+                  {c.numero ?? 'Número aparece após conectar'}
                 </p>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="flex size-64 items-center justify-center rounded-lg border border-dashed border-border bg-background p-2">
-                {qr ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={qr}
-                    alt="QR code para conectar o WhatsApp"
-                    className="size-full object-contain"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <QrCode className="size-16" strokeWidth={1} />
-                    <Loader2 className="size-4 animate-spin" />
-                  </div>
-                )}
-              </div>
 
-              <p className="max-w-xs text-center text-xs text-muted-foreground">
-                Abra o WhatsApp {'>'} Aparelhos conectados {'>'} Conectar
-                aparelho e aponte a câmera para o código. Ele se renova sozinho
-                antes de vencer.
-              </p>
+                <div className="flex gap-2">
+                  {c.status !== 'conectada' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-2"
+                      onClick={() => setQrAberto({ id: c.id, nome: c.nome })}
+                    >
+                      <QrCode className="size-4" />
+                      QR Code
+                    </Button>
+                  )}
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => void pedirQr()}
-              >
-                <RefreshCw className="size-4" />
-                Gerar novo código
-              </Button>
-            </>
-          )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-muted-foreground hover:text-destructive"
+                    disabled={removendo}
+                    onClick={() => remover(c.id)}
+                    aria-label={`Remover ${c.nome}`}
+                  >
+                    <Trash2 className="size-4" />
+                    Remover
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-          <Button
-            variant="destructive"
-            size="sm"
-            className="gap-2"
-            onClick={remover}
-            disabled={removendo}
-          >
-            {removendo ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Trash2 className="size-4" />
-            )}
-            {removendo ? 'Removendo...' : 'Remover conexão'}
-          </Button>
-        </CardContent>
-      </Card>
+      {qrAberto && (
+        <DialogoQr
+          id={qrAberto.id}
+          nome={qrAberto.nome}
+          qrInicial={qrAberto.qr}
+          aberto
+          aoFechar={() => {
+            setQrAberto(null)
+            router.refresh()
+          }}
+        />
+      )}
     </>
   )
 }

@@ -122,14 +122,14 @@ describe('Contatos', () => {
 
 describe('Disparos', () => {
   it('mostra o progresso de cada campanha', async () => {
-    montar(<ListaDisparos etiquetas={[]} />)
+    montar(<ListaDisparos etiquetas={[]} conexoes={[]} />)
     expect(await screen.findByText('Promoção Black Friday')).toBeInTheDocument()
     // 1840 de 3200 entregues
     expect(screen.getByText('58%')).toBeInTheDocument()
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<ListaDisparos etiquetas={[]} />)
+    await comExemploDesligado(<ListaDisparos etiquetas={[]} conexoes={[]} />)
     expect(screen.getByText('Nenhuma campanha')).toBeInTheDocument()
   })
 })

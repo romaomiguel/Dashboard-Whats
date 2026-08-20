@@ -23,21 +23,32 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
-import { conexoes } from '@/lib/data'
+import type { Conexao } from '@/lib/conexoes'
+import { conexoes as conexoesExemplo } from '@/lib/data'
 import type { Etiqueta } from '@/lib/etiquetas'
 
-export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
+export function NovoDisparoDialog({
+  etiquetas,
+  conexoes,
+}: {
+  etiquetas: Etiqueta[]
+  conexoes: Conexao[]
+}) {
   const { mostrarExemplo } = useDadosExemplo()
 
-  // Conexão real só existe a partir da Entrega 2. Até lá a lista vem do
-  // exemplo — e some junto com ele ao zerar, em vez de oferecer quatro
-  // aparelhos que não existem.
-  const listaConexoes = mostrarExemplo ? conexoes : []
+  // Conexão de verdade manda. Só quem ainda não conectou nenhum aparelho vê
+  // as de exemplo — e elas somem ao zerar o selo.
+  const listaConexoes =
+    conexoes.length > 0
+      ? conexoes.map((c) => ({ chave: c.id, rotulo: c.nome }))
+      : mostrarExemplo
+        ? conexoesExemplo.map((c) => ({ chave: c.numero, rotulo: c.nome }))
+        : []
 
   // items mapeia valor -> rótulo. Sem ele o Base UI mostra no gatilho o valor
   // cru: 'todos' em minúsculo e o uuid da etiqueta em vez do nome.
   const itensConexao = Object.fromEntries(
-    listaConexoes.map((c) => [c.numero, c.nome]),
+    listaConexoes.map((c) => [c.chave, c.rotulo]),
   )
   const itensPublico = {
     todos: 'Todos os contatos',
@@ -76,8 +87,8 @@ export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
                 </SelectTrigger>
                 <SelectContent>
                   {listaConexoes.map((c) => (
-                    <SelectItem key={c.numero} value={c.numero}>
-                      {c.nome}
+                    <SelectItem key={c.chave} value={c.chave}>
+                      {c.rotulo}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,7 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { TIMEOUT_ACORDAR_MS } from '@/lib/evolution/client'
+import { chamar, TIMEOUT_ACORDAR_MS } from '@/lib/evolution/client'
+import { endpoints } from '@/lib/evolution/endpoints'
 import { EvolutionError } from '@/lib/evolution/errors'
 import {
   conectarInstancia,
@@ -10,14 +11,16 @@ import {
   gerarNomeInstancia,
   removerInstancia,
 } from '@/lib/evolution/instances'
-import type { StatusConexao } from '@/lib/consultas/conexao'
+import { LIMITE_NOME_CONEXAO, type StatusConexao } from '@/lib/conexoes'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
 export type EstadoConexaoUi = {
   erro?: string
   ok?: boolean
   qr?: string
+  id?: string
   status?: StatusConexao
+  numero?: string | null
 }
 
 async function usuarioAtual() {
@@ -41,9 +44,6 @@ function mensagemEvolution(erro: unknown): string {
 
   if (erro instanceof EvolutionError) {
     if (erro.kind === 'configuracao') {
-      // Nomear a variável que falta poupa uma rodada de tentativa e erro.
-      // Na Vercel, variável nova só vale a partir do próximo deploy — o
-      // deploy em execução continua com o ambiente com que foi construído.
       return `Falta ${erro.message} no ambiente do servidor. Na Vercel: Settings › Environment Variables, confira o escopo (Production x Preview) e refaça o deploy — variável nova não entra em deploy já publicado.`
     }
     if (erro.kind === 'rede') {
@@ -53,7 +53,7 @@ function mensagemEvolution(erro: unknown): string {
       return 'A EVOLUTION_API_KEY foi recusada pelo servidor.'
     }
     if (erro.kind === 'nome_invalido') {
-      return 'Esta conexão está com um nome inválido no banco e não dá para usar. Clique em "Remover conexão" e crie outra.'
+      return 'Esta conexão está com um nome inválido no banco e não dá para usar. Remova e crie outra.'
     }
   }
   return 'Não foi possível falar com a Evolution API. Tente de novo.'
@@ -65,29 +65,54 @@ function urlDoWebhook(): string {
   return `${base}/api/webhooks/evolution/${segredo}`
 }
 
+function mensagemDeBanco(codigo: string | undefined, padrao: string) {
+  if (codigo === '23505') return 'Você já tem uma conexão com esse nome.'
+  // PostgREST responde PGRST204 quando a coluna não está no schema cache.
+  if (codigo === 'PGRST204' || codigo === '42703') {
+    return 'A coluna de nome ainda não existe. Rode a migration 0005 no Supabase.'
+  }
+  return padrao
+}
+
+/** Só a linha do próprio usuário, para nenhuma ação alcançar conexão alheia. */
+async function conexaoDoUsuario(
+  supabase: Awaited<ReturnType<typeof criarClienteServidor>>,
+  id: string,
+  ownerId: string,
+) {
+  const { data } = await supabase
+    .from('instances')
+    .select('id, evolution_name, status')
+    .eq('id', id)
+    .eq('owner_id', ownerId)
+    .maybeSingle()
+  return data
+}
+
 /**
- * Cria a instância na Evolution e devolve o QR para leitura.
+ * Cria uma conexão na Evolution e devolve o QR para leitura.
  *
  * A primeira chamada pode pegar o Render dormindo, daí o timeout estendido.
  */
-export async function criarConexao(): Promise<EstadoConexaoUi> {
+export async function criarConexao(
+  _estadoAnterior: EstadoConexaoUi,
+  formData: FormData,
+): Promise<EstadoConexaoUi> {
+  const nome = String(formData.get('nome') ?? '').trim()
+
+  if (!nome) return { erro: 'Dê um nome à conexão.' }
+  if (nome.length > LIMITE_NOME_CONEXAO) {
+    return { erro: `O nome deve ter no máximo ${LIMITE_NOME_CONEXAO} caracteres.` }
+  }
+
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  const { data: existente } = await supabase
-    .from('instances')
-    .select('evolution_name')
-    .maybeSingle()
-
-  if (existente) {
-    return { erro: 'Você já tem uma conexão. Remova a atual antes de criar outra.' }
-  }
-
-  const nome = gerarNomeInstancia()
+  const nomeEvolution = gerarNomeInstancia()
 
   let qr: string | undefined
   try {
-    const resposta = await criarInstancia(nome, urlDoWebhook(), {
+    const resposta = await criarInstancia(nomeEvolution, urlDoWebhook(), {
       timeoutMs: TIMEOUT_ACORDAR_MS,
     })
     qr = resposta.qrcode?.base64
@@ -95,34 +120,39 @@ export async function criarConexao(): Promise<EstadoConexaoUi> {
     return { erro: mensagemEvolution(erro) }
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('instances')
-    .insert({ owner_id: user.id, evolution_name: nome, status: 'conectando' })
+    .insert({
+      owner_id: user.id,
+      nome,
+      evolution_name: nomeEvolution,
+      status: 'conectando',
+    })
+    .select('id')
+    .single()
 
   if (error) {
     // Instância órfã na Evolution seria pior que nenhuma: desfaz.
-    await removerInstancia(nome).catch(() => {})
-    return { erro: 'Não foi possível registrar a conexão. Tente de novo.' }
+    await removerInstancia(nomeEvolution).catch(() => {})
+    return {
+      erro: mensagemDeBanco(error.code, 'Não foi possível registrar a conexão.'),
+    }
   }
 
   revalidatePath('/conexao')
-  return { ok: true, qr, status: 'conectando' }
+  return { ok: true, qr, id: String(data.id), status: 'conectando' }
 }
 
 /**
  * Busca um QR novo. O código do WhatsApp expira em cerca de um minuto, então
- * a tela precisa poder pedir outro sem recriar a instância.
+ * a tela precisa poder pedir outro sem recriar a conexão.
  */
-export async function atualizarQr(): Promise<EstadoConexaoUi> {
+export async function atualizarQr(id: string): Promise<EstadoConexaoUi> {
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  const { data: conexao } = await supabase
-    .from('instances')
-    .select('evolution_name')
-    .maybeSingle()
-
-  if (!conexao) return { erro: 'Nenhuma conexão para atualizar.' }
+  const conexao = await conexaoDoUsuario(supabase, id, user.id)
+  if (!conexao) return { erro: 'Conexão não encontrada.' }
 
   try {
     const resposta = await conectarInstancia(String(conexao.evolution_name), {
@@ -135,21 +165,46 @@ export async function atualizarQr(): Promise<EstadoConexaoUi> {
 }
 
 /**
+ * Número do aparelho conectado, extraído do jid que a Evolution devolve.
+ *
+ * Vem de fetchInstances porque connectionState só informa o estado. Falha
+ * aqui não derruba a verificação: o número é enfeite, o estado é o que
+ * importa.
+ */
+async function numeroDaInstancia(nomeEvolution: string): Promise<string | null> {
+  try {
+    const lista = await chamar<unknown>(endpoints.instancia.listar())
+    if (!Array.isArray(lista)) return null
+
+    const encontrada = lista.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item as { name?: string }).name === nomeEvolution,
+    ) as { ownerJid?: string; number?: string } | undefined
+
+    const jid = encontrada?.ownerJid ?? encontrada?.number
+    if (!jid) return null
+
+    const digitos = String(jid).split('@')[0].replace(/\D/g, '')
+    return digitos ? `+${digitos}` : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Consulta o estado na Evolution e grava no banco.
  *
- * A tela chama isto em intervalo enquanto o QR está na tela: o webhook não
+ * A tela chama isto em intervalo enquanto o QR está aberto: o webhook não
  * chega em desenvolvimento, porque a Evolution não alcança o localhost.
  */
-export async function verificarConexao(): Promise<EstadoConexaoUi> {
+export async function verificarConexao(id: string): Promise<EstadoConexaoUi> {
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  const { data: conexao } = await supabase
-    .from('instances')
-    .select('id, evolution_name, status')
-    .maybeSingle()
-
-  if (!conexao) return { erro: 'Nenhuma conexão para verificar.' }
+  const conexao = await conexaoDoUsuario(supabase, id, user.id)
+  if (!conexao) return { erro: 'Conexão não encontrada.' }
 
   let estado: string
   try {
@@ -159,31 +214,40 @@ export async function verificarConexao(): Promise<EstadoConexaoUi> {
   }
 
   const status: StatusConexao =
-    estado === 'open' ? 'conectada' : estado === 'connecting' ? 'conectando' : 'desconectada'
+    estado === 'open'
+      ? 'conectada'
+      : estado === 'connecting'
+        ? 'conectando'
+        : 'desconectada'
 
-  if (status !== conexao.status) {
+  const numero =
+    status === 'conectada'
+      ? await numeroDaInstancia(String(conexao.evolution_name))
+      : null
+
+  if (status !== conexao.status || numero) {
     await supabase
       .from('instances')
-      .update({ status, atualizado_em: new Date().toISOString() })
+      .update({
+        status,
+        ...(numero ? { numero } : {}),
+        atualizado_em: new Date().toISOString(),
+      })
       .eq('id', conexao.id)
       .eq('owner_id', user.id)
 
     revalidatePath('/conexao')
   }
 
-  return { ok: true, status }
+  return { ok: true, status, numero }
 }
 
-/** Desconecta e apaga a instância, na Evolution e no banco. */
-export async function removerConexao(): Promise<EstadoConexaoUi> {
+/** Desconecta e apaga a conexão, na Evolution e no banco. */
+export async function removerConexao(id: string): Promise<EstadoConexaoUi> {
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  const { data: conexao } = await supabase
-    .from('instances')
-    .select('id, evolution_name')
-    .maybeSingle()
-
+  const conexao = await conexaoDoUsuario(supabase, id, user.id)
   if (!conexao) return { ok: true }
 
   // Se a Evolution estiver fora do ar, a linha some do mesmo jeito: manter um
