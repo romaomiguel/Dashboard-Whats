@@ -10,6 +10,9 @@ const banco = vi.hoisted(() => ({
   upserts: [] as { valores: Record<string, unknown>; opcoes: unknown }[],
   deletes: [] as Record<string, unknown>[],
   erroUpsert: null as { message: string } | null,
+  // 'rejeita' simula o delete rejeitando a promise de verdade (não apenas
+  // resolvendo com {error}), que é o caminho que faltava proteção.
+  erroDelete: null as { message: string } | 'rejeita' | null,
 }))
 
 function clienteFalso() {
@@ -37,8 +40,15 @@ function clienteFalso() {
               banco.deletes.push(filtros)
               return encadeado
             },
-            then(resolver: (r: { error: unknown }) => void) {
-              resolver({ error: null })
+            then(
+              resolver: (r: { error: unknown }) => void,
+              rejeitar?: (erro: unknown) => void,
+            ) {
+              if (banco.erroDelete === 'rejeita') {
+                rejeitar?.(new Error('conexão caiu'))
+                return
+              }
+              resolver({ error: banco.erroDelete })
             },
           }
           return encadeado
@@ -64,6 +74,7 @@ beforeEach(() => {
   banco.upserts = []
   banco.deletes = []
   banco.erroUpsert = null
+  banco.erroDelete = null
 })
 
 describe('registrarNotificacao', () => {
@@ -125,5 +136,25 @@ describe('registrarNotificacao', () => {
     const gravou = await registrarNotificacao(clienteFalso(), 'user-1', mensagem)
 
     expect(gravou).toBe(true)
+  })
+
+  it('erro no upsert devolve false, sem lançar', async () => {
+    banco.erroUpsert = { message: 'falhou' }
+
+    await expect(
+      registrarNotificacao(clienteFalso(), 'user-1', mensagem),
+    ).resolves.toBe(false)
+  })
+
+  // A notificação já foi gravada quando a retenção roda: uma falha ali não
+  // pode subir como exceção nem apagar o `true` já conquistado, senão o
+  // webhook devolveria erro para a Evolution (que reenvia em laço) ou um
+  // disparo pararia no meio do lote.
+  it('erro na retenção não derruba a chamada nem muda o true já gravado', async () => {
+    banco.erroDelete = 'rejeita'
+
+    await expect(
+      registrarNotificacao(clienteFalso(), 'user-1', mensagem),
+    ).resolves.toBe(true)
   })
 })

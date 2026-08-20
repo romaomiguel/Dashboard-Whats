@@ -60,6 +60,9 @@ export async function registrarNotificacao(
     return false
   }
 
+  // A notificação já foi gravada: falha na limpeza não pode voltar atrás e
+  // transformar esse sucesso em `false`, nem subir como exceção — o portão
+  // de erro é só o do upsert acima.
   await limparAntigas(db, ownerId)
   return true
 }
@@ -69,16 +72,29 @@ export async function registrarNotificacao(
  *
  * O cron de disparos é opcional e pode nunca ser configurado; retenção que
  * depende de algo opcional não é retenção. A consulta usa o índice do sino.
+ *
+ * Nunca deixa erro subir: quem chama já gravou a notificação e não pode
+ * receber uma exceção por causa de limpeza, sob pena de o webhook devolver
+ * erro para a Evolution (que reenvia em laço) ou um disparo parar no meio
+ * do lote.
  */
 async function limparAntigas(db: SupabaseClient, ownerId: string) {
   const limite = new Date(
     Date.now() - DIAS_RETENCAO * 24 * 60 * 60 * 1000,
   ).toISOString()
 
-  await db
-    .from('notificacoes')
-    .delete()
-    .eq('owner_id', ownerId)
-    .eq('lida', true)
-    .lt('atualizado_em', limite)
+  try {
+    const { error } = await db
+      .from('notificacoes')
+      .delete()
+      .eq('owner_id', ownerId)
+      .eq('lida', true)
+      .lt('atualizado_em', limite)
+
+    if (error) {
+      console.error('[notificacao] retenção não limpou:', error.code, error.message)
+    }
+  } catch (erro) {
+    console.error('[notificacao] retenção rejeitou:', erro)
+  }
 }
