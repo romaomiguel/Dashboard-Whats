@@ -10,6 +10,7 @@ const acoes = vi.hoisted(() => ({
   verificar: vi.fn(),
   remover: vi.fn(),
   limpar: vi.fn(),
+  webhook: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -22,6 +23,7 @@ vi.mock('@/app/(app)/conexao/actions', () => ({
   verificarConexao: (id: string) => acoes.verificar(id),
   removerConexao: (id: string) => acoes.remover(id),
   limparOrfas: () => acoes.limpar(),
+  corrigirWebhook: (id: string) => acoes.webhook(id),
 }))
 
 const QR_FALSO = 'data:image/png;base64,iVBORw0KGgo='
@@ -44,6 +46,7 @@ beforeEach(() => {
   acoes.verificar.mockResolvedValue({ ok: true, status: 'conectando' })
   acoes.remover.mockResolvedValue({ ok: true })
   acoes.limpar.mockResolvedValue({ ok: true, removidas: 0 })
+  acoes.webhook.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -238,6 +241,45 @@ describe('instâncias órfãs', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'a Evolution não respondeu',
+    )
+  })
+})
+
+describe('webhook da conexão', () => {
+  // Sem NEXT_PUBLIC_APP_URL, a URL gravada na Evolution saía relativa e ela
+  // nunca conseguia chamar: mensagem recebida não aparecia e recibo não
+  // chegava, tudo em silêncio.
+  const conectada = {
+    id: 'c1',
+    nome: 'Comercial',
+    nomeEvolution: 'inst_abcd1234',
+    numero: '+5511900000000',
+    status: 'conectada' as const,
+    atualizadoEm: '2026-08-20T10:00:00.000Z',
+  }
+
+  it('reaponta sem precisar reler o QR', async () => {
+    render(<PainelConexao conexoes={[conectada]} />)
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Corrigir webhook de Comercial' }),
+    )
+
+    await waitFor(() => expect(acoes.webhook).toHaveBeenCalledWith('c1'))
+    expect(await screen.findByRole('status')).toHaveTextContent('reapontado')
+  })
+
+  it('faltando a variável, diz qual é', async () => {
+    acoes.webhook.mockResolvedValue({
+      erro: 'Falta NEXT_PUBLIC_APP_URL no ambiente do servidor.',
+    })
+
+    render(<PainelConexao conexoes={[conectada]} />)
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Corrigir webhook de Comercial' }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'NEXT_PUBLIC_APP_URL',
     )
   })
 })

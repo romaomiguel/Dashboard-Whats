@@ -16,6 +16,7 @@ import {
   Signal,
   Smartphone,
   Trash2,
+  Webhook,
   Wrench,
 } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
@@ -42,6 +43,7 @@ import {
   type Conexao,
 } from '@/lib/conexoes'
 import {
+  corrigirWebhook,
   criarConexao,
   limparOrfas,
   removerConexao,
@@ -192,6 +194,19 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
   // Instância que ficou na Evolution sem registro aqui continua tentando
   // reconectar com o mesmo número, e sessão duplicada faz o WhatsApp deslogar
   // o aparelho inteiro.
+  // Instância criada antes de a NEXT_PUBLIC_APP_URL existir ficou com um
+  // endereço relativo gravado na Evolution, que ela nunca consegue chamar.
+  // Reapontar evita ter que apagar a conexão e ler o QR de novo.
+  function corrigir(id: string) {
+    setErro('')
+    setAviso('')
+    iniciarRemocao(async () => {
+      const resultado = await corrigirWebhook(id)
+      if (resultado.erro) setErro(resultado.erro)
+      else setAviso('Webhook reapontado. Mande uma mensagem para testar.')
+    })
+  }
+
   async function limpar() {
     setErro('')
     setAviso('')
@@ -312,6 +327,19 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
                       QR Code
                     </Button>
                   )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-muted-foreground"
+                    disabled={removendo}
+                    onClick={() => corrigir(c.id)}
+                    aria-label={`Corrigir webhook de ${c.nome}`}
+                    title="Reaponta o webhook desta conexão para a URL atual do app"
+                  >
+                    <Webhook className="size-4" />
+                    Webhook
+                  </Button>
 
                   <Button
                     variant="ghost"

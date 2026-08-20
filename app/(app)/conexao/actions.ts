@@ -7,6 +7,7 @@ import { EvolutionError } from '@/lib/evolution/errors'
 import {
   conectarInstancia,
   criarInstancia,
+  definirWebhook,
   estadoInstancia,
   gerarNomeInstancia,
   removerInstancia,
@@ -59,9 +60,31 @@ function mensagemEvolution(erro: unknown): string {
   return 'Não foi possível falar com a Evolution API. Tente de novo.'
 }
 
+/**
+ * Endereço que a Evolution vai chamar quando algo acontecer.
+ *
+ * Precisa ser absoluto: sem NEXT_PUBLIC_APP_URL isto virava
+ * "/api/webhooks/evolution/...", um caminho relativo que a Evolution registra
+ * sem reclamar e nunca consegue chamar. O sintoma era mudo — mensagem
+ * recebida não aparecia e recibo de leitura não chegava, sem erro nenhum.
+ */
 function urlDoWebhook(): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '')
   const segredo = process.env.WEBHOOK_SECRET ?? ''
+
+  if (!base) {
+    throw new EvolutionError('configuracao', 'NEXT_PUBLIC_APP_URL')
+  }
+  if (!/^https?:\/\//.test(base)) {
+    throw new EvolutionError(
+      'configuracao',
+      `NEXT_PUBLIC_APP_URL com endereço completo (o valor atual, "${base}", não começa com http)`,
+    )
+  }
+  if (!segredo) {
+    throw new EvolutionError('configuracao', 'WEBHOOK_SECRET')
+  }
+
   return `${base}/api/webhooks/evolution/${segredo}`
 }
 
@@ -112,6 +135,8 @@ export async function criarConexao(
 
   let qr: string | undefined
   try {
+    // urlDoWebhook lança se o ambiente estiver incompleto; melhor falhar aqui
+    // do que criar uma instância que nunca receberia evento.
     const resposta = await criarInstancia(nomeEvolution, urlDoWebhook(), {
       timeoutMs: TIMEOUT_ACORDAR_MS,
     })
@@ -334,4 +359,29 @@ export async function limparOrfas(): Promise<EstadoConexaoUi & { removidas?: num
 
   revalidatePath('/conexao')
   return { ok: true, removidas }
+}
+
+/**
+ * Reaponta o webhook de uma conexão já existente.
+ *
+ * Serve para consertar sem ter que apagar a conexão e ler o QR de novo —
+ * quem criou a instância antes de a NEXT_PUBLIC_APP_URL existir ficou com um
+ * endereço relativo gravado lá.
+ */
+export async function corrigirWebhook(id: string): Promise<EstadoConexaoUi> {
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  const conexao = await conexaoDoUsuario(supabase, id, user.id)
+  if (!conexao) return { erro: 'Conexão não encontrada.' }
+
+  try {
+    await definirWebhook(String(conexao.evolution_name), urlDoWebhook(), {
+      timeoutMs: TIMEOUT_ACORDAR_MS,
+    })
+  } catch (erro) {
+    return { erro: mensagemEvolution(erro) }
+  }
+
+  return { ok: true }
 }

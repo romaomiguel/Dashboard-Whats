@@ -283,6 +283,38 @@ https://SUA-URL.vercel.app/api/disparos/processar?chave=SEU_WEBHOOK_SECRET
 
 ---
 
+## Resposta não aparece / status não muda de "enviada"
+
+Sintoma: o disparo sai, mas quando a pessoa responde nada acontece na aba de
+Mensagens, e o recibo de entrega e leitura nunca chega.
+
+Causa: a Evolution não consegue chamar o webhook. Confira o endereço que ela
+tem gravado — troque `NOME_DA_INSTANCIA` pelo nome que aparece no cartão da
+conexão:
+
+```
+GET https://zapcrm-evolution.onrender.com/webhook/find/NOME_DA_INSTANCIA
+   header: apikey: SUA_EVOLUTION_API_KEY
+```
+
+Se o `url` vier **sem domínio**, começando direto em `/api/webhooks/...`, é
+porque a conexão foi criada quando a `NEXT_PUBLIC_APP_URL` não estava definida.
+A Evolution aceita esse valor sem reclamar e nunca consegue chamá-lo.
+
+**Conserto, sem precisar reler o QR:**
+
+1. Na Vercel, em Settings › Environment Variables, defina
+   `NEXT_PUBLIC_APP_URL` com o endereço completo do deploy, incluindo
+   `https://`. Marque Production e Preview.
+2. Refaça o deploy — variável nova não entra em deploy já publicado.
+3. Na tela **Conexão**, clique em **Webhook** no cartão da conexão.
+4. Mande uma mensagem de outro celular e confira a aba de Mensagens.
+
+A partir de agora, criar uma conexão com essa variável faltando falha na hora
+e diz o nome dela, em vez de gravar um endereço quebrado em silêncio.
+
+---
+
 ## Se o WhatsApp desconectar (erro 401)
 
 Acontece quando o WhatsApp desloga o aparelho — por remoção em Aparelhos

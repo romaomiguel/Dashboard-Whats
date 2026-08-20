@@ -92,3 +92,29 @@ export async function removerInstancia(
     throw erro
   }
 }
+
+/**
+ * Regrava a configuração de webhook de uma instância existente.
+ *
+ * A rota é /webhook/set/{instance} — confirmado contra a 2.3.7 na Task 10; a
+ * /webhook/instance citada na documentação não existe nessa versão.
+ */
+export function definirWebhook(
+  nome: string,
+  url: string,
+  opcoes: Pick<OpcoesChamada, 'timeoutMs'> = {},
+) {
+  return chamar(endpoints.webhook.definir(nome), {
+    ...opcoes,
+    metodo: 'POST',
+    corpo: {
+      webhook: {
+        enabled: true,
+        url,
+        byEvents: false,
+        base64: false,
+        events: [...EVENTOS_WEBHOOK],
+      },
+    },
+  })
+}
