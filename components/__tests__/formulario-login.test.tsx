@@ -31,3 +31,27 @@ describe('FormularioLogin', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('mostrar senha', () => {
+  it('começa oculta e alterna para texto', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    render(<FormularioLogin acao={async () => ({})} />)
+
+    const senha = screen.getByLabelText('Senha')
+    expect(senha).toHaveAttribute('type', 'password')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mostrar senha' }))
+    expect(senha).toHaveAttribute('type', 'text')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ocultar senha' }))
+    expect(senha).toHaveAttribute('type', 'password')
+  })
+
+  it('leva o destino junto no formulário', () => {
+    const { container } = render(
+      <FormularioLogin acao={async () => ({})} destino="/contatos" />,
+    )
+    const oculto = container.querySelector('input[name="destino"]')
+    expect(oculto).toHaveValue('/contatos')
+  })
+})

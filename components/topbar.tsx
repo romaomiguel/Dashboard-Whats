@@ -22,7 +22,13 @@ export function Topbar({ email }: { email: string }) {
           />
         </div>
 
-        <Button render={<Link href="/disparos" />} className="gap-2">
+        {/* nativeButton={false}: o Base UI só dispensa o <button> nativo
+            quando avisado, e aqui o render é um <a> do Next. */}
+        <Button
+          render={<Link href="/disparos" />}
+          nativeButton={false}
+          className="gap-2"
+        >
           <Send className="size-4" />
           <span className="hidden sm:inline">Novo disparo</span>
         </Button>
