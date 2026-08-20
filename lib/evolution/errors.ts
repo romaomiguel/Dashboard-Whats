@@ -3,6 +3,7 @@ export type TipoErroEvolution =
   | 'rede'
   | 'autenticacao'
   | 'instancia_inexistente'
+  | 'nome_invalido'
   | 'servidor'
   | 'resposta_invalida'
 
@@ -36,6 +37,8 @@ export function mensagemAmigavel(erro: EvolutionError): string {
       return 'Credencial do servidor de WhatsApp inválida.'
     case 'instancia_inexistente':
       return 'Esta conexão não existe mais no servidor.'
+    case 'nome_invalido':
+      return 'Esta conexão está com um nome inválido e não pode ser usada.'
     case 'servidor':
       return 'O servidor de WhatsApp respondeu com erro.'
     case 'resposta_invalida':

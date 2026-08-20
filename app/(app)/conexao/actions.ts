@@ -52,6 +52,9 @@ function mensagemEvolution(erro: unknown): string {
     if (erro.kind === 'autenticacao') {
       return 'A EVOLUTION_API_KEY foi recusada pelo servidor.'
     }
+    if (erro.kind === 'nome_invalido') {
+      return 'Esta conexão está com um nome inválido no banco e não dá para usar. Clique em "Remover conexão" e crie outra.'
+    }
   }
   return 'Não foi possível falar com a Evolution API. Tente de novo.'
 }

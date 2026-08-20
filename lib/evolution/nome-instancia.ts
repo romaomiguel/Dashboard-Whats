@@ -10,7 +10,7 @@ const FORMATO_NOME = /^inst_[0-9a-f]{8}$/
 export function validarNomeInstancia(nome: string): string {
   if (!FORMATO_NOME.test(nome)) {
     throw new EvolutionError(
-      'configuracao',
+      'nome_invalido',
       `Nome de instância inválido: ${JSON.stringify(nome)}`,
     )
   }

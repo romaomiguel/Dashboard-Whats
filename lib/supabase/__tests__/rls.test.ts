@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -16,6 +16,21 @@ async function entrar(email: string) {
   return cliente
 }
 
+/**
+ * Nome no mesmo formato que o app exige (inst_ + 8 hex).
+ *
+ * Antes era `inst_teste_${Date.now()}`, que o validarNomeInstancia rejeita.
+ * Como este teste grava na tabela de verdade, aquela linha aparecia na tela
+ * de Conexão do usuário e travava a tela — o app não conseguia nem gerar QR
+ * nem entender o que era aquilo.
+ */
+function nomeDeTeste() {
+  const hex = Math.floor(Math.random() * 0xffffffff)
+    .toString(16)
+    .padStart(8, '0')
+  return `inst_${hex}`
+}
+
 describe.skipIf(!configurado)('RLS de instances', () => {
   let idDoA: string
 
@@ -30,7 +45,7 @@ describe.skipIf(!configurado)('RLS de instances', () => {
     await admin.from('instances').delete().eq('owner_id', ownerA)
     const { data, error } = await admin
       .from('instances')
-      .insert({ owner_id: ownerA, evolution_name: `inst_teste_${Date.now()}` })
+      .insert({ owner_id: ownerA, evolution_name: nomeDeTeste() })
       .select('id')
       .single()
     if (error) throw new Error(error.message)
@@ -65,5 +80,15 @@ describe.skipIf(!configurado)('RLS de instances', () => {
     })
     const { data } = await admin.from('instances').select('id').eq('id', idDoA)
     expect(data).toHaveLength(1)
+  })
+
+  // Este teste grava no banco de verdade. Sem limpar, a linha ficava para trás
+  // e aparecia como conexão na tela do usuário depois de cada rodada.
+  afterAll(async () => {
+    if (!idDoA) return
+    const admin = createClient(url!, service!, {
+      auth: { persistSession: false },
+    })
+    await admin.from('instances').delete().eq('id', idDoA)
   })
 })

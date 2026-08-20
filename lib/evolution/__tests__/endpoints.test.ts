@@ -22,7 +22,7 @@ describe('endpoints', () => {
       endpoints.instancia.conectar('a/b')
       expect.unreachable()
     } catch (erro) {
-      expect(erro).toMatchObject({ kind: 'configuracao' })
+      expect(erro).toMatchObject({ kind: 'nome_invalido' })
     }
   })
 
@@ -34,7 +34,7 @@ describe('endpoints', () => {
         endpoints.instancia.conectar(nome)
         expect.unreachable()
       } catch (erro) {
-        expect(erro).toMatchObject({ kind: 'configuracao' })
+        expect(erro).toMatchObject({ kind: 'nome_invalido' })
       }
     }
   })
@@ -66,5 +66,22 @@ describe('endpoints', () => {
     expect(endpoints.webhook.definir('inst_a1b2c3d4')).toBe('/webhook/set/inst_a1b2c3d4')
     expect(endpoints.mensagem.texto('inst_a1b2c3d4')).toBe('/message/sendText/inst_a1b2c3d4')
     expect(endpoints.chat.contatos('inst_a1b2c3d4')).toBe('/chat/findContacts/inst_a1b2c3d4')
+  })
+})
+
+describe('nome inválido não é erro de configuração', () => {
+  it('o formato de teste antigo é rejeitado com o tipo certo', () => {
+    // A linha que o teste de RLS deixava no banco tinha este formato, e
+    // classificá-la como 'configuracao' fazia a tela pedir variável de
+    // ambiente para um nome malformado.
+    expect(() => endpoints.instancia.conectar('inst_teste_1787199627206')).toThrow(
+      expect.objectContaining({ kind: 'nome_invalido' }),
+    )
+  })
+
+  it('nome no formato correto passa', () => {
+    expect(endpoints.instancia.conectar('inst_a1b2c3d4')).toBe(
+      '/instance/connect/inst_a1b2c3d4',
+    )
   })
 })
