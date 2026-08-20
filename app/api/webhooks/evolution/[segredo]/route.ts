@@ -111,7 +111,7 @@ async function registrarRecebida(evento: EventoWebhook) {
 
   // A do disparo já foi gravada com esta mesma chave; ignoreDuplicates deixa
   // o índice único resolver, inclusive se os dois chegarem ao mesmo tempo.
-  await admin.from('mensagens').upsert(
+  const { error } = await admin.from('mensagens').upsert(
     {
       owner_id: instancia.owner_id,
       instance_id: instancia.id,
@@ -126,6 +126,12 @@ async function registrarRecebida(evento: EventoWebhook) {
     },
     { onConflict: 'mensagem_key', ignoreDuplicates: true },
   )
+
+  // Sem isto, uma falha de gravação sumia sem deixar rastro e o sintoma era
+  // apenas "a mensagem não aparece na tela".
+  if (error) {
+    console.error('[webhook] não gravou a mensagem:', error.code, error.message)
+  }
 }
 
 export const dynamic = 'force-dynamic'

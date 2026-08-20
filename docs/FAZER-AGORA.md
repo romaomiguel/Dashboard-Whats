@@ -78,6 +78,18 @@ funcionando.
 
 ---
 
+## Passo 0c — Rodar a migration 0011
+
+**Onde:** Supabase → SQL Editor. Cole o conteúdo de
+`supabase/migrations/0011_indice_inferivel.sql`.
+
+Conserta o índice da 0010 — ele foi criado parcial, e assim o Postgres não
+consegue usá-lo no `ON CONFLICT`, o que fazia **toda** gravação do webhook
+falhar com erro 42P10. Também faz remover uma conexão levar as conversas dela
+junto, e apaga as que já ficaram órfãs.
+
+---
+
 ## Passo 0b — Rodar a migration 0010
 
 **Onde:** Supabase → SQL Editor

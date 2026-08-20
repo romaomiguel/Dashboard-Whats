@@ -348,6 +348,7 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
                     disabled={removendo}
                     onClick={() => remover(c.id)}
                     aria-label={`Remover ${c.nome}`}
+                    title="Remove a conexão e as conversas dela"
                   >
                     <Trash2 className="size-4" />
                     Remover
