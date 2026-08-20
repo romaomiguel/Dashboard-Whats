@@ -1,135 +1,133 @@
 # O que fazer agora
 
-Quatro passos. As migrations de 0001 a 0008 já estão aplicadas — conferido no
-banco. Falta só a 0009 e a configuração do Render.
+O erro no passo de medição revelou duas coisas. A ordem mudou: o **passo 0 é
+urgente** e deve ser feito antes de qualquer outro.
+
+---
+
+## Passo 0 — URGENTE: fechar as tabelas da Evolution
+
+### O que está acontecendo
+
+As tabelas da Evolution ficaram no schema `public`, o mesmo que o Supabase
+publica pela API REST, e **sem proteção**. A chave anônima — aquela que vai no
+JavaScript de toda página do seu site, visível para qualquer visitante — hoje
+consegue:
+
+| Tabela | Linhas | O que contém |
+|---|---|---|
+| `Message` | **150.525** | O conteúdo de todas as mensagens |
+| `Contact` | 3.697 | Sua agenda inteira, com nomes e fotos |
+| `Chat` | 3.503 | Todas as conversas |
+| `Session` | — | **As credenciais da sessão do WhatsApp** |
+| `Instance` | — | Os números conectados |
+
+E não é só leitura: testei `DELETE` e `UPDATE` com a chave anônima e os dois
+foram aceitos. Qualquer pessoa poderia apagar tudo.
+
+As tabelas do ZapCRM **não** têm esse problema — conferi, a RLS delas barra a
+chave anônima corretamente. É só a Evolution.
+
+### O conserto
+
+**Onde:** Supabase → SQL Editor → colar → Run
+
+```sql
+do $$
+declare t record;
+begin
+  for t in
+    select tablename
+    from pg_tables
+    where schemaname = 'public'
+      and tablename not in (
+        'profiles', 'instances', 'etiquetas', 'contatos',
+        'midias', 'disparos', 'disparo_envios', 'mensagens'
+      )
+  loop
+    execute format('revoke all on public.%I from anon, authenticated', t.tablename);
+  end loop;
+end $$;
+```
+
+Isso tira o acesso dos dois papéis que a API REST usa. **A Evolution continua
+funcionando normalmente** — ela conecta direto no Postgres com outro usuário,
+não pela API REST.
+
+### Confirmar que fechou
+
+No SQL Editor:
+
+```sql
+select tablename,
+       has_table_privilege('anon', 'public.' || quote_ident(tablename), 'SELECT') as anon_le
+from pg_tables
+where schemaname = 'public'
+order by anon_le desc, tablename;
+```
+
+Todas as tabelas da Evolution devem aparecer com `anon_le` em `false`. As oito
+do ZapCRM podem continuar `true` — elas são protegidas por RLS, que é outra
+camada.
+
+Depois disso, abra o app e confira que Mensagens, Contatos e Conexão seguem
+funcionando.
+
+> Se um dia você atualizar a Evolution e ela criar tabelas novas, rode o mesmo
+> bloco outra vez.
 
 ---
 
 ## Passo 1 — Rodar a migration 0009
 
-**Onde:** Supabase → SQL Editor → New query → colar → Run
+**Onde:** Supabase → SQL Editor
 
 Deixa a segurança das tabelas mais barata e indexa as chaves estrangeiras.
-Roda em segundos e não apaga nada.
+Roda em segundos e não apaga nada. O arquivo completo está em
+`supabase/migrations/0009_desempenho.sql` — cole o conteúdo dele.
 
-```sql
-drop policy if exists proprio_perfil on public.profiles;
-create policy proprio_perfil on public.profiles
-  for all to authenticated
-  using (id = (select auth.uid()))
-  with check (id = (select auth.uid()));
-
-drop policy if exists propria_instancia on public.instances;
-create policy propria_instancia on public.instances
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists propria_etiqueta on public.etiquetas;
-create policy propria_etiqueta on public.etiquetas
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists proprio_contato on public.contatos;
-create policy proprio_contato on public.contatos
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists propria_midia on public.midias;
-create policy propria_midia on public.midias
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists proprio_disparo on public.disparos;
-create policy proprio_disparo on public.disparos
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists proprio_envio on public.disparo_envios;
-create policy proprio_envio on public.disparo_envios
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists propria_mensagem on public.mensagens;
-create policy propria_mensagem on public.mensagens
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists midia_propria_leitura on storage.objects;
-create policy midia_propria_leitura on storage.objects
-  for select to authenticated
-  using (
-    bucket_id = 'midias'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
-
-drop policy if exists midia_propria_escrita on storage.objects;
-create policy midia_propria_escrita on storage.objects
-  for insert to authenticated
-  with check (
-    bucket_id = 'midias'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
-
-drop policy if exists midia_propria_exclusao on storage.objects;
-create policy midia_propria_exclusao on storage.objects
-  for delete to authenticated
-  using (
-    bucket_id = 'midias'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
-
-create index if not exists disparos_instance_idx
-  on public.disparos (instance_id);
-
-create index if not exists disparos_etiqueta_idx
-  on public.disparos (etiqueta_id)
-  where etiqueta_id is not null;
-
-create index if not exists envios_owner_idx
-  on public.disparo_envios (owner_id);
-
-create index if not exists mensagens_instance_idx
-  on public.mensagens (instance_id)
-  where instance_id is not null;
-
-create index if not exists mensagens_disparo_idx
-  on public.mensagens (disparo_id)
-  where disparo_id is not null;
-
-analyze public.disparos;
-analyze public.disparo_envios;
-analyze public.mensagens;
-```
-
-**Como saber que deu certo:** entre no app e abra Contatos, Mensagens e
-Disparos. Vendo os dados normalmente, está certo. Se algo aparecer vazio,
-avise — é sinal de que uma policy ficou apertada demais.
+**Como saber que deu certo:** abra Contatos, Mensagens e Disparos no app.
+Vendo os dados normalmente, está certo.
 
 ---
 
-## Passo 2 — Ver de onde vem o peso no banco
+## Passo 2 — Medir o banco
 
-**Onde:** Supabase → SQL Editor
+A consulta que eu tinha passado quebrava: ela montava o nome da tabela como
+texto, e os nomes da Evolution têm maiúsculas (`"Message"`), que o Postgres
+rebaixa para minúsculas sem aspas. Esta usa o identificador interno e não tem
+esse problema:
 
 ```sql
 select
-  schemaname,
-  pg_size_pretty(sum(pg_total_relation_size(schemaname||'.'||tablename))) as tamanho
-from pg_tables
-where schemaname not in ('pg_catalog', 'information_schema')
-group by schemaname
-order by sum(pg_total_relation_size(schemaname||'.'||tablename)) desc;
+  n.nspname as schema,
+  pg_size_pretty(sum(pg_total_relation_size(c.oid))) as tamanho
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relkind in ('r', 'p', 'm')
+  and n.nspname not in ('pg_catalog', 'information_schema')
+group by n.nspname
+order by sum(pg_total_relation_size(c.oid)) desc;
 ```
 
-Guarde o resultado. O esperado é `evolution` com muitos MB e `public` com
-poucos KB — as tabelas do app somam 10 linhas no total.
+E as maiores tabelas:
+
+```sql
+select
+  n.nspname || '.' || c.relname as tabela,
+  pg_size_pretty(pg_total_relation_size(c.oid)) as tamanho
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relkind in ('r', 'p', 'm')
+  and n.nspname not in ('pg_catalog', 'information_schema')
+order by pg_total_relation_size(c.oid) desc
+limit 15;
+```
+
+Guarde o resultado para comparar depois do passo 4.
+
+**A resposta da sua pergunta original já está clara:** 150 mil mensagens no
+banco é o que consome a memória.
 
 ---
 
@@ -146,7 +144,7 @@ DATABASE_SAVE_DATA_LABELS      = false
 DATABASE_SAVE_DATA_HISTORIC    = false
 ```
 
-Se `LABELS` ou `HISTORIC` não existirem na lista, crie.
+Se `LABELS` ou `HISTORIC` não existirem, crie.
 
 **Não mexa nestas três:**
 
@@ -156,67 +154,69 @@ DATABASE_SAVE_DATA_NEW_MESSAGE   = true   ← ver o passo 5
 DATABASE_SAVE_MESSAGE_UPDATE     = true   ← ver o passo 5
 ```
 
-Depois clique em **Save**, e o Render reinicia sozinho.
+Clique em **Save** e o Render reinicia sozinho.
 
-**Nada disso afeta o app:** nenhuma tela lê o banco da Evolution. Mensagens e
+Nada disso afeta o app: nenhuma tela lê as tabelas da Evolution. Mensagens e
 Contatos leem tabelas próprias, e o status de conexão é uma chamada ao vivo.
 
 ---
 
-## Passo 4 — Limpar o que já ficou acumulado
+## Passo 4 — Limpar as 150 mil linhas
 
-**Só depois do passo 3, com o serviço já reiniciado.**
-
-Primeiro veja o que existe:
-
-```sql
-select relname, n_live_tup, pg_size_pretty(pg_total_relation_size(relid))
-from pg_stat_user_tables
-where schemaname = 'evolution'
-order by pg_total_relation_size(relid) desc;
-```
-
-Depois esvazie **só** as que apareceram grandes, ajustando os nomes:
+**Só depois do passo 3, com o serviço já reiniciado** — senão ela volta a
+encher enquanto você limpa.
 
 ```sql
-truncate table evolution."Message" restart identity cascade;
-truncate table evolution."MessageUpdate" restart identity cascade;
-truncate table evolution."Chat" restart identity cascade;
-truncate table evolution."Contact" restart identity cascade;
-truncate table evolution."Label" restart identity cascade;
+truncate table public."Message" restart identity cascade;
+truncate table public."MessageUpdate" restart identity cascade;
+truncate table public."Chat" restart identity cascade;
+truncate table public."Contact" restart identity cascade;
+truncate table public."Label" restart identity cascade;
 ```
 
-⚠️ **Não apague a tabela de instâncias da Evolution** — é ela que guarda a
-sessão do WhatsApp conectado. Apagando, o QR precisa ser lido de novo.
+As aspas nos nomes são obrigatórias. Se alguma tabela não existir, apague a
+linha dela e rode o resto.
 
-Rode o passo 2 outra vez para comparar.
+⚠️ **Não apague `public."Session"` nem `public."Instance"`** — são elas que
+guardam a sessão do WhatsApp conectado. Apagando, o QR precisa ser lido de
+novo.
+
+Rode o passo 2 outra vez para ver o quanto liberou.
 
 ---
 
 ## Passo 5 — Opcional: testar as duas variáveis de mensagem
 
-Só se quiser economizar mais. É reversível.
-
-`DATABASE_SAVE_MESSAGE_UPDATE` é o maior gerador de linhas do banco: cria uma
-para cada mudança de status de cada mensagem. Mas não confirmei se desligá-la
-também silencia o webhook, que é de onde a aba de Mensagens se alimenta.
+`DATABASE_SAVE_MESSAGE_UPDATE` é o maior gerador de linhas: cria uma para cada
+mudança de status de cada mensagem. Mas não confirmei se desligá-la também
+silencia o webhook, que é de onde a aba de Mensagens se alimenta.
 
 1. No Render, mude as duas para `false` e salve.
 2. Mande uma mensagem de outro celular para o número conectado.
 3. Abra a aba **Mensagens** no app.
 
 - **Apareceu** → pode deixar desligado.
-- **Não apareceu** → volte as duas para `true` e salve. Nada se perde.
+- **Não apareceu** → volte as duas para `true`. Nada se perde.
 
 ---
 
 ## Opcional — envio automático dos disparos agendados
 
-Hoje o disparo sai pelo botão **"Enviar agora"**. Para o agendamento
-funcionar sozinho, crie um job no cron-job.org, a cada 1 minuto:
+Hoje o disparo sai pelo botão **"Enviar agora"**. Para o agendamento funcionar
+sozinho, crie um job no cron-job.org, a cada 1 minuto:
 
 ```
 https://SUA-URL.vercel.app/api/disparos/processar?chave=SEU_WEBHOOK_SECRET
 ```
 
-O `SEU_WEBHOOK_SECRET` é o mesmo valor que está no `.env` e na Vercel.
+---
+
+## Depois: separar a Evolution do schema public
+
+O passo 0 fecha o buraco, mas a causa é a Evolution dividir o schema `public`
+com o app. O certo é ela ter o próprio schema, que a API REST não publica —
+era essa a intenção do plano original, e não foi o que aconteceu na prática.
+
+Envolve mover as tabelas e apontar a `DATABASE_CONNECTION_URI` para o schema
+novo, com risco de a sessão se perder no caminho. Vale fazer com calma, não
+agora. Me avise quando quiser e eu preparo o passo a passo.

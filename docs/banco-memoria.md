@@ -16,36 +16,34 @@ pressão de memória:
 | disparo_envios | 1 |
 | mensagens | 1 |
 
-O suspeito é a **Evolution API**, que usa o mesmo Postgres (schema `evolution`,
-configurado por `DATABASE_CONNECTION_URI`) e vinha com toda a persistência
-ligada.
+O consumo vem da **Evolution API**, que usa o mesmo Postgres — e, ao contrário
+do que o plano previa, **no mesmo schema `public`**, não num separado. Medido:
+150.525 linhas em `Message`, 3.697 em `Contact`, 3.503 em `Chat`.
+
+Isso trouxe junto um problema de segurança, tratado no passo 0 de
+`FAZER-AGORA.md`: no schema `public` essas tabelas ficam publicadas pela API
+REST, e estavam abertas à chave anônima.
 
 ## 1. Confirmar de onde vem o peso
 
 Rode no SQL Editor do Supabase:
 
+Montar o nome da tabela como texto não funciona: os nomes da Evolution têm
+maiúsculas (`"Message"`) e o Postgres os rebaixa para minúsculas sem aspas.
+Usar o identificador interno evita isso.
+
 ```sql
--- Tamanho por schema
+-- As quinze maiores tabelas
 select
-  schemaname,
-  pg_size_pretty(sum(pg_total_relation_size(schemaname||'.'||tablename))) as tamanho
-from pg_tables
-where schemaname not in ('pg_catalog', 'information_schema')
-group by schemaname
-order by sum(pg_total_relation_size(schemaname||'.'||tablename)) desc;
-
--- As dez maiores tabelas
-select
-  schemaname || '.' || relname as tabela,
-  n_live_tup as linhas,
-  pg_size_pretty(pg_total_relation_size(relid)) as tamanho
-from pg_stat_user_tables
-order by pg_total_relation_size(relid) desc
-limit 10;
+  n.nspname || '.' || c.relname as tabela,
+  pg_size_pretty(pg_total_relation_size(c.oid)) as tamanho
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relkind in ('r', 'p', 'm')
+  and n.nspname not in ('pg_catalog', 'information_schema')
+order by pg_total_relation_size(c.oid) desc
+limit 15;
 ```
-
-Se `evolution` aparecer com dezenas ou centenas de MB e o `public` com alguns
-KB, a conclusão está confirmada.
 
 ## 2. Parar de acumular
 
@@ -99,34 +97,25 @@ aparecendo, religue as duas: a perda é só de espaço.
 ## 3. Limpar o que já foi acumulado
 
 Só depois de conferir o passo 1 e com o serviço já reiniciado com a
-configuração nova. **Não apague a tabela de instâncias** — é ela que guarda a
-sessão do WhatsApp conectado.
+configuração nova.
 
 ```sql
--- Confira antes o que existe e o tamanho de cada uma
-select relname, n_live_tup, pg_size_pretty(pg_total_relation_size(relid))
-from pg_stat_user_tables
-where schemaname = 'evolution'
-order by pg_total_relation_size(relid) desc;
+truncate table public."Message" restart identity cascade;
+truncate table public."MessageUpdate" restart identity cascade;
+truncate table public."Chat" restart identity cascade;
+truncate table public."Contact" restart identity cascade;
+truncate table public."Label" restart identity cascade;
 ```
 
-Havendo tabelas grandes de mensagem, chat, contato ou label, o esvaziamento é:
-
-```sql
--- Ajuste os nomes ao que o passo anterior mostrou.
-truncate table evolution."Message" restart identity cascade;
-truncate table evolution."MessageUpdate" restart identity cascade;
-truncate table evolution."Chat" restart identity cascade;
-truncate table evolution."Contact" restart identity cascade;
-truncate table evolution."Label" restart identity cascade;
-```
+As aspas são obrigatórias. **Não apague `public."Session"` nem
+`public."Instance"`** — guardam a sessão do WhatsApp conectado.
 
 `truncate` devolve o espaço na hora, sem precisar de `vacuum full`.
 
 Se preferir não apagar, dá para manter só o recente:
 
 ```sql
-delete from evolution."Message"
+delete from public."Message"
 where "messageTimestamp" < extract(epoch from now() - interval '7 days');
 ```
 
