@@ -78,6 +78,34 @@ funcionando.
 
 ---
 
+## Passo 0b — Rodar a migration 0010
+
+**Onde:** Supabase → SQL Editor
+
+Garante uma linha por mensagem, agora que o webhook também grava o que sai do
+seu celular — antes só o disparo gravava saída.
+
+```sql
+create unique index mensagens_key_unica
+  on public.mensagens (mensagem_key)
+  where mensagem_key is not null;
+
+drop index if exists public.mensagens_key_idx;
+```
+
+Se der erro de chave duplicada, é porque alguma mensagem já entrou duas vezes.
+Rode isto antes para achá-las:
+
+```sql
+select mensagem_key, count(*)
+from public.mensagens
+where mensagem_key is not null
+group by mensagem_key
+having count(*) > 1;
+```
+
+---
+
 ## Passo 1 — Rodar a migration 0009
 
 **Onde:** Supabase → SQL Editor

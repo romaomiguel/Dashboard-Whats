@@ -71,15 +71,23 @@ async function registrarRecibo(evento: EventoWebhook) {
   await admin.from('mensagens').update({ status: novo }).eq('id', mensagem.id)
 }
 
-/** Grava a mensagem recebida, para a tela de Mensagens ter o que mostrar. */
+/**
+ * Grava a mensagem que passou pelo WhatsApp, nas duas direções.
+ *
+ * O que sai também entra aqui: antes só o disparo gravava saída, então
+ * responder pelo celular não aparecia em lugar nenhum e a conversa ficava
+ * eternamente como "a pessoa respondeu". O índice único em mensagem_key
+ * impede que a mensagem do disparo entre duas vezes.
+ */
 async function registrarRecebida(evento: EventoWebhook) {
   const dados = evento.data as {
-    key?: ChaveMensagem
+    key?: ChaveMensagem & { id?: string }
     pushName?: string
   } | null
 
-  // Mensagem que o próprio número enviou já foi registrada pelo disparo.
-  if (!dados?.key || dados.key.fromMe) return
+  if (!dados?.key) return
+
+  const daPropriaConta = Boolean(dados.key.fromMe)
 
   // Trata os dois endereçamentos do WhatsApp, o antigo e o LID; descarta
   // grupo, transmissão e newsletter.
@@ -99,15 +107,25 @@ async function registrarRecebida(evento: EventoWebhook) {
 
   if (!instancia) return
 
-  await admin.from('mensagens').insert({
-    owner_id: instancia.owner_id,
-    instance_id: instancia.id,
-    numero,
-    nome: dados.pushName ?? null,
-    direcao: 'entrada',
-    status: 'recebida',
-    texto: texto.slice(0, 4096),
-  })
+  const chave = dados.key.id ? String(dados.key.id) : null
+
+  // A do disparo já foi gravada com esta mesma chave; ignoreDuplicates deixa
+  // o índice único resolver, inclusive se os dois chegarem ao mesmo tempo.
+  await admin.from('mensagens').upsert(
+    {
+      owner_id: instancia.owner_id,
+      instance_id: instancia.id,
+      numero,
+      // pushName é de quem enviou: numa mensagem própria seria o nome do
+      // usuário, não o do contato.
+      nome: daPropriaConta ? null : (dados.pushName ?? null),
+      direcao: daPropriaConta ? 'saida' : 'entrada',
+      status: daPropriaConta ? 'enviada' : 'recebida',
+      texto: texto.slice(0, 4096),
+      mensagem_key: chave,
+    },
+    { onConflict: 'mensagem_key', ignoreDuplicates: true },
+  )
 }
 
 export const dynamic = 'force-dynamic'

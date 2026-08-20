@@ -244,32 +244,25 @@ describe('mídias salvas', () => {
 })
 
 describe('conversas reais', () => {
-  const conversas = [
-    {
-      numero: '5565984038479',
-      nome: 'Joana Prado',
-      previa: 'Promoção de agosto!',
-      quando: '2026-08-20T05:01:53.000Z',
-      direcao: 'saida' as const,
-      status: 'enviada' as const,
-      naoLidas: 0,
-    },
-  ]
+  const base = {
+    numero: '5565984627628',
+    nome: 'Joana Prado',
+    previa: 'Promoção de agosto!',
+    quando: '2026-08-20T05:01:53.000Z',
+    direcao: 'saida' as const,
+    naoLidas: 0,
+  }
 
   it('o disparo enviado aparece como conversa', async () => {
-    montar(<ListaConversas conversas={conversas} />)
+    montar(<ListaConversas conversas={[{ ...base, estado: 'enviada' as const }]} />)
     expect(await screen.findByText('Joana Prado')).toBeInTheDocument()
     expect(screen.getByText('Promoção de agosto!')).toBeInTheDocument()
-    expect(screen.getByText('enviada')).toBeInTheDocument()
+    expect(screen.getByText('Enviada')).toBeInTheDocument()
   })
 
   it('envio que falhou se identifica como falha', async () => {
-    montar(
-      <ListaConversas
-        conversas={[{ ...conversas[0], status: 'falhou' as const }]}
-      />,
-    )
-    expect(await screen.findByText('falhou')).toBeInTheDocument()
+    montar(<ListaConversas conversas={[{ ...base, estado: 'falhou' as const }]} />)
+    expect(await screen.findByText('Falhou')).toBeInTheDocument()
   })
 
   it('resposta recebida conta como não lida', async () => {
@@ -277,22 +270,96 @@ describe('conversas reais', () => {
       <ListaConversas
         conversas={[
           {
-            ...conversas[0],
+            ...base,
             direcao: 'entrada' as const,
-            status: 'recebida' as const,
+            estado: 'respondeu' as const,
             naoLidas: 2,
           },
         ]}
       />,
     )
-    expect(await screen.findByText('respondeu')).toBeInTheDocument()
+    expect(await screen.findByText('Respondeu')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 
+  // O que o usuário pediu: depois de eu responder, deixa de ser "respondeu".
+  it('depois de eu responder, a conversa vira respondida', async () => {
+    montar(<ListaConversas conversas={[{ ...base, estado: 'respondida' as const }]} />)
+    expect(await screen.findByText('Respondida')).toBeInTheDocument()
+    expect(screen.queryByText('Respondeu')).not.toBeInTheDocument()
+  })
+
   it('havendo conversa real, o exemplo some', async () => {
-    montar(<ListaConversas conversas={conversas} />)
+    montar(<ListaConversas conversas={[{ ...base, estado: 'enviada' as const }]} />)
     await screen.findByText('Joana Prado')
     expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
+  })
+})
+
+describe('filtro por estado', () => {
+  const conversas = [
+    {
+      numero: '5565984627628',
+      nome: 'Amanda',
+      previa: 'X',
+      quando: '2026-08-20T13:00:00.000Z',
+      direcao: 'entrada' as const,
+      estado: 'respondeu' as const,
+      naoLidas: 1,
+    },
+    {
+      numero: '5565984038479',
+      nome: 'Matheus',
+      previa: 'Teste',
+      quando: '2026-08-20T12:00:00.000Z',
+      direcao: 'saida' as const,
+      estado: 'enviada' as const,
+      naoLidas: 0,
+    },
+    {
+      numero: '5511912345678',
+      nome: 'Joana',
+      previa: 'Obrigado',
+      quando: '2026-08-20T11:00:00.000Z',
+      direcao: 'saida' as const,
+      estado: 'respondida' as const,
+      naoLidas: 0,
+    },
+  ]
+
+  it('conta cada estado a partir da lista inteira', async () => {
+    montar(<ListaConversas conversas={conversas} />)
+    expect(await screen.findByRole('button', { name: 'Todas (3)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Respondeu (1)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enviada (1)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Respondida (1)' })).toBeInTheDocument()
+  })
+
+  it('filtrar deixa só quem está naquele estado', async () => {
+    montar(<ListaConversas conversas={conversas} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Respondeu (1)' }))
+
+    expect(screen.getByText('Amanda')).toBeInTheDocument()
+    expect(screen.queryByText('Matheus')).not.toBeInTheDocument()
+    expect(screen.queryByText('Joana')).not.toBeInTheDocument()
+  })
+
+  it('a busca continua valendo dentro do filtro', async () => {
+    montar(<ListaConversas conversas={conversas} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Todas (3)' }))
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Buscar conversa' }),
+      'Matheus',
+    )
+
+    expect(screen.getByText('Matheus')).toBeInTheDocument()
+    expect(screen.queryByText('Amanda')).not.toBeInTheDocument()
+  })
+
+  it('não oferece filtro de estado que ninguém tem', async () => {
+    montar(<ListaConversas conversas={conversas} />)
+    await screen.findByText('Amanda')
+    expect(screen.queryByRole('button', { name: /Falhou/ })).not.toBeInTheDocument()
   })
 })
 
@@ -310,7 +377,7 @@ describe('resposta e o nono dígito', () => {
             previa: 'X',
             quando: '2026-08-20T13:00:00.000Z',
             direcao: 'entrada' as const,
-            status: 'recebida' as const,
+            estado: 'respondeu' as const,
             naoLidas: 1,
           },
         ]}
@@ -318,7 +385,7 @@ describe('resposta e o nono dígito', () => {
     )
 
     expect(await screen.findByText('Amanda')).toBeInTheDocument()
-    expect(screen.getByText('respondeu')).toBeInTheDocument()
+    expect(screen.getByText('Respondeu')).toBeInTheDocument()
     // Um card só, não dois.
     expect(screen.getAllByText('Amanda')).toHaveLength(1)
   })

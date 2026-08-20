@@ -1,18 +1,27 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { AlertCircle, Check, MessageCircle, Search } from 'lucide-react'
+import { AlertCircle, Check, CornerUpLeft, MessageCircle, Search } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { EstadoVazio } from '@/components/estado-vazio'
 import { SeloDadosExemplo } from '@/components/selo-dados-exemplo'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { Conversa } from '@/lib/consultas/mensagens'
+import {
+  DESCRICAO_CONVERSA,
+  ESTADOS_CONVERSA,
+  ESTILO_CONVERSA,
+  ROTULO_CONVERSA,
+  type EstadoConversa,
+} from '@/lib/conversas'
 import { mensagensRecentes, summary } from '@/lib/data'
 import { formatarHora } from '@/lib/datas'
 import { iniciais } from '@/lib/iniciais'
+import { cn } from '@/lib/utils'
 
 /** Linha da lista, venha ela do banco ou dos dados de exemplo. */
 type Linha = {
@@ -21,39 +30,14 @@ type Linha = {
   previa: string
   hora: string
   naoLidas: number
-  rotulo: string
-  estilo: string
-  erro: boolean
+  estado: EstadoConversa
 }
 
-const ESTILO = {
-  // Do banco
-  enviada: 'bg-muted text-muted-foreground',
-  entregue: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
-  lida: 'bg-primary/15 text-primary',
-  recebida: 'bg-primary/15 text-primary',
-  falhou: 'bg-destructive/15 text-destructive',
-  // Dos dados de exemplo
-  entregue_exemplo: 'bg-muted text-muted-foreground',
-  respondida: 'bg-primary/15 text-primary',
-} as const
-
-function doBanco(conversas: Conversa[]): Linha[] {
-  return conversas.map((c) => ({
-    chave: c.numero,
-    contato: c.nome,
-    previa: c.previa,
-    hora: formatarHora(c.quando),
-    naoLidas: c.naoLidas,
-    rotulo:
-      c.status === 'falhou'
-        ? 'falhou'
-        : c.direcao === 'entrada'
-          ? 'respondeu'
-          : c.status,
-    estilo: ESTILO[c.status],
-    erro: c.status === 'falhou',
-  }))
+/** Os dados de exemplo têm outro vocabulário; traduz para o mesmo modelo. */
+const ESTADO_EXEMPLO: Record<string, EstadoConversa> = {
+  respondida: 'respondida',
+  lida: 'enviada',
+  entregue: 'enviada',
 }
 
 export function ListaConversas({
@@ -65,6 +49,7 @@ export function ListaConversas({
 }) {
   const { mostrarExemplo } = useDadosExemplo()
   const [busca, setBusca] = useState(buscaInicial)
+  const [filtro, setFiltro] = useState<EstadoConversa | 'todas'>('todas')
 
   // Só cai no exemplo quem ainda não trocou mensagem nenhuma.
   const usandoExemplo = conversas.length === 0 && mostrarExemplo
@@ -76,24 +61,41 @@ export function ListaConversas({
         previa: m.previa,
         hora: m.hora,
         naoLidas: m.naoLidas,
-        rotulo: m.status,
-        estilo: ESTILO[m.status],
-        erro: false,
+        estado: ESTADO_EXEMPLO[m.status] ?? 'enviada',
       }))
-    : doBanco(conversas)
+    : conversas.map((c) => ({
+        chave: c.numero,
+        contato: c.nome,
+        previa: c.previa,
+        hora: formatarHora(c.quando),
+        naoLidas: c.naoLidas,
+        estado: c.estado,
+      }))
 
   const ativas = usandoExemplo ? summary.mensagens : lista.length
 
+  // Contagem por estado sai da lista inteira, não da filtrada: um contador que
+  // muda ao clicar no próprio filtro não serviria para nada.
+  const contagem = useMemo(() => {
+    const mapa = new Map<EstadoConversa, number>()
+    for (const l of lista) mapa.set(l.estado, (mapa.get(l.estado) ?? 0) + 1)
+    return mapa
+  }, [lista])
+
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase()
-    if (!termo) return lista
-    return lista.filter(
-      (m) =>
-        m.contato.toLowerCase().includes(termo) ||
-        m.chave.includes(termo) ||
-        m.previa.toLowerCase().includes(termo),
-    )
-  }, [lista, busca])
+    return lista
+      .filter((m) => filtro === 'todas' || m.estado === filtro)
+      .filter(
+        (m) =>
+          !termo ||
+          m.contato.toLowerCase().includes(termo) ||
+          m.chave.includes(termo) ||
+          m.previa.toLowerCase().includes(termo),
+      )
+  }, [lista, busca, filtro])
+
+  const disponiveis = ESTADOS_CONVERSA.filter((e) => (contagem.get(e) ?? 0) > 0)
 
   return (
     <>
@@ -122,14 +124,46 @@ export function ListaConversas({
           </div>
         </CardHeader>
 
+        {disponiveis.length > 0 && (
+          <div
+            role="group"
+            aria-label="Filtrar por estado"
+            className="flex flex-wrap gap-2 border-b border-border px-6 pb-4"
+          >
+            <Button
+              variant={filtro === 'todas' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setFiltro('todas')}
+              aria-pressed={filtro === 'todas'}
+            >
+              Todas ({lista.length})
+            </Button>
+
+            {disponiveis.map((estado) => (
+              <Button
+                key={estado}
+                variant={filtro === estado ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setFiltro(estado)}
+                aria-pressed={filtro === estado}
+                title={DESCRICAO_CONVERSA[estado]}
+              >
+                {ROTULO_CONVERSA[estado]} ({contagem.get(estado)})
+              </Button>
+            ))}
+          </div>
+        )}
+
         <CardContent className="p-0">
           {filtradas.length === 0 ? (
             <EstadoVazio
               icone={MessageCircle}
-              titulo={busca ? 'Nada encontrado' : 'Nenhuma conversa'}
+              titulo={
+                busca || filtro !== 'todas' ? 'Nada encontrado' : 'Nenhuma conversa'
+              }
               descricao={
-                busca
-                  ? 'Nenhuma conversa corresponde à sua busca.'
+                busca || filtro !== 'todas'
+                  ? 'Nenhuma conversa corresponde ao que você procura.'
                   : 'Conecte seu WhatsApp e faça um disparo — o que sair e o que chegar aparece aqui.'
               }
             />
@@ -146,7 +180,7 @@ export function ListaConversas({
                         {iniciais(m.contato)}
                       </AvatarFallback>
                     </Avatar>
-                    {m.naoLidas > 0 && (
+                    {m.estado === 'respondeu' && m.naoLidas > 0 && (
                       <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                         {m.naoLidas}
                       </span>
@@ -167,13 +201,18 @@ export function ListaConversas({
                     </p>
                   </div>
 
-                  <Badge className={`${m.estilo} gap-1`}>
-                    {m.erro ? (
+                  <Badge
+                    className={cn('gap-1', ESTILO_CONVERSA[m.estado])}
+                    title={DESCRICAO_CONVERSA[m.estado]}
+                  >
+                    {m.estado === 'falhou' ? (
                       <AlertCircle className="size-3" />
+                    ) : m.estado === 'respondeu' ? (
+                      <CornerUpLeft className="size-3" />
                     ) : (
                       <Check className="size-3" />
                     )}
-                    {m.rotulo}
+                    {ROTULO_CONVERSA[m.estado]}
                   </Badge>
                 </div>
               ))}

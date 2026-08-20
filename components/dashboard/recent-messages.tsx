@@ -42,10 +42,11 @@ function daConversa(c: Conversa): Linha {
     previa: c.previa,
     hora: formatarHora(c.quando),
     naoLidas: c.naoLidas,
+    // O cartão da Home fala o vocabulário antigo de Mensagem; traduz.
     status:
-      c.direcao === 'entrada'
+      c.estado === 'respondeu'
         ? 'respondida'
-        : (c.status as string) === 'lida'
+        : c.estado === 'respondida'
           ? 'lida'
           : 'entregue',
 
