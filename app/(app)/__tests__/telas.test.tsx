@@ -295,3 +295,31 @@ describe('conversas reais', () => {
     expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
   })
 })
+
+describe('resposta e o nono dígito', () => {
+  // O disparo saiu para 5565984627628 e a resposta chegou de 556584627628 —
+  // o WhatsApp devolve o número brasileiro sem o nono dígito. Antes disso
+  // virava uma conversa nova e a original ficava parada em "enviada".
+  it('a mais recente manda: respondida aparece como respondeu', async () => {
+    montar(
+      <ListaConversas
+        conversas={[
+          {
+            numero: '556584627628',
+            nome: 'Amanda',
+            previa: 'X',
+            quando: '2026-08-20T13:00:00.000Z',
+            direcao: 'entrada' as const,
+            status: 'recebida' as const,
+            naoLidas: 1,
+          },
+        ]}
+      />,
+    )
+
+    expect(await screen.findByText('Amanda')).toBeInTheDocument()
+    expect(screen.getByText('respondeu')).toBeInTheDocument()
+    // Um card só, não dois.
+    expect(screen.getAllByText('Amanda')).toHaveLength(1)
+  })
+})

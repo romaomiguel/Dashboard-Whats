@@ -4,6 +4,8 @@
  * O fuso é fixo em São Paulo pelo mesmo motivo de lib/datas.ts: servidor em
  * UTC e navegador do usuário precisam concordar sobre onde "hoje" começa.
  */
+import { chaveDoNumero } from '@/lib/numeros'
+
 const FUSO = 'America/Sao_Paulo'
 
 /** O Brasil não usa mais horário de verão desde 2019, então -3 é estável. */
@@ -94,9 +96,13 @@ export function funilDeEntrega(linhas: LinhaMensagem[]): EtapaFunil[] {
   ).length
   const lidas = saidas.filter((l) => l.status === 'lida').length
 
-  const alcancados = new Set(saidas.map((l) => l.numero))
+  // Pela chave canônica: senão quem respondeu sem o nono dígito nunca casaria
+  // com o número para o qual a mensagem saiu.
+  const alcancados = new Set(saidas.map((l) => chaveDoNumero(l.numero)))
   const responderam = new Set(
-    linhas.filter((l) => l.direcao === 'entrada').map((l) => l.numero),
+    linhas
+      .filter((l) => l.direcao === 'entrada')
+      .map((l) => chaveDoNumero(l.numero)),
   )
   const respostas = [...responderam].filter((n) => alcancados.has(n)).length
 

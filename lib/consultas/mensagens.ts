@@ -1,3 +1,4 @@
+import { chaveDoNumero } from '@/lib/numeros'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
 export type Conversa = {
@@ -33,10 +34,12 @@ export async function listarConversas(): Promise<Conversa[]> {
     const numero = String(linha.numero)
     const direcao = String(linha.direcao) as Conversa['direcao']
 
-    const existente = porNumero.get(numero)
+    // Agrupa pela forma canônica: o WhatsApp devolve o número brasileiro sem
+    // o nono dígito, então o cru separaria a resposta da mensagem enviada.
+    const existente = porNumero.get(chaveDoNumero(numero))
 
     if (!existente) {
-      porNumero.set(numero, {
+      porNumero.set(chaveDoNumero(numero), {
         numero,
         nome: linha.nome ? String(linha.nome) : numero,
         previa: String(linha.texto),

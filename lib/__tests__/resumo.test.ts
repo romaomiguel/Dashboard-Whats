@@ -92,19 +92,29 @@ describe('funilDeEntrega', () => {
 
   it('respondidas conta contatos, não mensagens', () => {
     const funil = funilDeEntrega([
-      msg({ numero: 'a' }),
-      msg({ numero: 'b' }),
-      msg({ numero: 'a', direcao: 'entrada', status: 'recebida' }),
-      msg({ numero: 'a', direcao: 'entrada', status: 'recebida' }),
+      msg({ numero: '5565984627628' }),
+      msg({ numero: '5565984038479' }),
+      msg({ numero: '5565984627628', direcao: 'entrada', status: 'recebida' }),
+      msg({ numero: '5565984627628', direcao: 'entrada', status: 'recebida' }),
     ])
     // Um dos dois alcançados respondeu, ainda que duas vezes.
     expect(funil[2]).toMatchObject({ etapa: 'Respondidas', valor: 50 })
   })
 
+  // O WhatsApp devolve o número brasileiro sem o nono dígito: a resposta chega
+  // de 556584627628 para um envio feito a 5565984627628.
+  it('casa a resposta com o envio apesar do nono dígito', () => {
+    const funil = funilDeEntrega([
+      msg({ numero: '5565984627628' }),
+      msg({ numero: '556584627628', direcao: 'entrada', status: 'recebida' }),
+    ])
+    expect(funil[2].valor).toBe(100)
+  })
+
   it('quem responde sem ter recebido nada não entra na conta', () => {
     const funil = funilDeEntrega([
-      msg({ numero: 'a' }),
-      msg({ numero: 'z', direcao: 'entrada', status: 'recebida' }),
+      msg({ numero: '5565984627628' }),
+      msg({ numero: '5511912345678', direcao: 'entrada', status: 'recebida' }),
     ])
     expect(funil[2].valor).toBe(0)
   })
