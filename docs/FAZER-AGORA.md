@@ -301,17 +301,25 @@ Se o `url` vier **sem domínio**, começando direto em `/api/webhooks/...`, é
 porque a conexão foi criada quando a `NEXT_PUBLIC_APP_URL` não estava definida.
 A Evolution aceita esse valor sem reclamar e nunca consegue chamá-lo.
 
+### Por que a variável estava definida e mesmo assim ficou vazia
+
+Variável com prefixo `NEXT_PUBLIC_` é **substituída durante a compilação**, não
+lida em tempo de execução. Se ela não existia no momento do build que gerou o
+deploy no ar, o valor congela como vazio — e acrescentá-la depois no painel não
+muda nada até haver um build novo. Verificado no bundle: o valor aparece
+cravado no arquivo compilado, não como leitura de `process.env`.
+
 **Conserto, sem precisar reler o QR:**
 
-1. Na Vercel, em Settings › Environment Variables, defina
-   `NEXT_PUBLIC_APP_URL` com o endereço completo do deploy, incluindo
-   `https://`. Marque Production e Preview.
-2. Refaça o deploy — variável nova não entra em deploy já publicado.
-3. Na tela **Conexão**, clique em **Webhook** no cartão da conexão.
-4. Mande uma mensagem de outro celular e confira a aba de Mensagens.
+1. **Refaça o deploy na Vercel.** Deployments › o mais recente › Redeploy. Isso
+   basta: a versão nova descobre o domínio sozinha.
+2. Na tela **Conexão**, clique em **Webhook** no cartão.
+3. Mande uma mensagem de outro celular e confira a aba de Mensagens.
 
-A partir de agora, criar uma conexão com essa variável faltando falha na hora
-e diz o nome dela, em vez de gravar um endereço quebrado em silêncio.
+Não é mais preciso configurar variável nenhuma para isso: o app agora lê o
+domínio em tempo de execução, e na Vercel ele vem sozinho. Se um dia você usar
+domínio próprio, ou publicar em outro lugar, defina `APP_URL` com o endereço
+completo — ela tem prioridade sobre o resto.
 
 ---
 

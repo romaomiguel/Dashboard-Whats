@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { descobrirUrlDoApp } from '@/lib/app-url'
 import { chamar, TIMEOUT_ACORDAR_MS } from '@/lib/evolution/client'
 import { endpoints } from '@/lib/evolution/endpoints'
 import { EvolutionError } from '@/lib/evolution/errors'
@@ -63,22 +64,17 @@ function mensagemEvolution(erro: unknown): string {
 /**
  * Endereço que a Evolution vai chamar quando algo acontecer.
  *
- * Precisa ser absoluto: sem NEXT_PUBLIC_APP_URL isto virava
- * "/api/webhooks/evolution/...", um caminho relativo que a Evolution registra
- * sem reclamar e nunca consegue chamar. O sintoma era mudo — mensagem
- * recebida não aparecia e recibo de leitura não chegava, sem erro nenhum.
+ * A descoberta fica em lib/app-url.ts, que prefere variáveis lidas em tempo de
+ * execução. Na Vercel funciona sem configurar nada.
  */
 function urlDoWebhook(): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '')
+  const base = descobrirUrlDoApp(process.env)
   const segredo = process.env.WEBHOOK_SECRET ?? ''
 
   if (!base) {
-    throw new EvolutionError('configuracao', 'NEXT_PUBLIC_APP_URL')
-  }
-  if (!/^https?:\/\//.test(base)) {
     throw new EvolutionError(
       'configuracao',
-      `NEXT_PUBLIC_APP_URL com endereço completo (o valor atual, "${base}", não começa com http)`,
+      'o endereço público do app (defina APP_URL, ou publique na Vercel, que injeta o domínio sozinha)',
     )
   }
   if (!segredo) {
@@ -87,6 +83,7 @@ function urlDoWebhook(): string {
 
   return `${base}/api/webhooks/evolution/${segredo}`
 }
+
 
 function mensagemDeBanco(codigo: string | undefined, padrao: string) {
   if (codigo === '23505') return 'Você já tem uma conexão com esse nome.'
