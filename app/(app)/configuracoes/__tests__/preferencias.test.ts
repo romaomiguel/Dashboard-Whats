@@ -59,6 +59,20 @@ describe('salvarPreferencia', () => {
     expect(banco.updates).toHaveLength(0)
   })
 
+  // Nomes herdados de Object.prototype (constructor, toString, __proto__,
+  // valueOf) devolvem valor truthy no acesso por colchetes e passariam pela
+  // checagem `if (!coluna)`. Server action é chamável por requisição HTTP
+  // direta, então o TypeScript do lado do cliente não barra essas strings.
+  it.each(['constructor', 'toString', '__proto__', 'valueOf'])(
+    'recusa o nome herdado %s sem tocar no banco',
+    async (tipo) => {
+      const estado = await salvarPreferencia(tipo as never, true)
+
+      expect(estado.erro).toMatch(/desconhecido/)
+      expect(banco.updates).toHaveLength(0)
+    },
+  )
+
   it('recusa quando não há sessão', async () => {
     banco.usuario = null
     const estado = await salvarPreferencia('mensagem', true)

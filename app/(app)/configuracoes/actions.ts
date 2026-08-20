@@ -98,13 +98,21 @@ export type EstadoPreferencia = { erro?: string; ok?: boolean }
  *
  * O tipo vira nome de coluna, então a validação contra PREFERENCIA_POR_TIPO
  * não é formalidade: sem ela, uma string da tela viraria identificador SQL.
+ * Server action é chamável por requisição HTTP direta, então o TypeScript do
+ * lado do cliente não barra nada — quem chega aqui pode ser qualquer string.
+ *
+ * `hasOwn`, não `PREFERENCIA_POR_TIPO[tipo]` sozinho: nomes herdados de
+ * Object.prototype como 'constructor' ou 'toString' devolvem valor truthy no
+ * acesso por colchetes e passariam pela checagem de "existe".
  */
 export async function salvarPreferencia(
   tipo: TipoNotificacao,
   ligado: boolean,
 ): Promise<EstadoPreferencia> {
+  if (!Object.hasOwn(PREFERENCIA_POR_TIPO, tipo)) {
+    return { erro: 'Tipo de notificação desconhecido.' }
+  }
   const coluna = PREFERENCIA_POR_TIPO[tipo]
-  if (!coluna) return { erro: 'Tipo de notificação desconhecido.' }
 
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }

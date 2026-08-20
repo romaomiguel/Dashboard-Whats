@@ -1,3 +1,4 @@
+import { usuarioLogado } from '@/lib/consultas/sessao'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
 export type Preferencias = {
@@ -14,13 +15,13 @@ const TUDO_LIGADO: Preferencias = {
 }
 
 export async function buscarPreferencias(): Promise<Preferencias> {
-  const supabase = await criarClienteServidor()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  // usuarioLogado() está em cache(): o layout já resolveu o usuário nesta
+  // mesma requisição, e buscar de novo com auth.getUser() gastaria uma ida
+  // a mais ao Supabase (~300ms) por carregamento da tela.
+  const user = await usuarioLogado()
   if (!user) return TUDO_LIGADO
+
+  const supabase = await criarClienteServidor()
 
   const { data, error } = await supabase
     .from('profiles')
