@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { DadosExemploProvider } from '@/components/dados-exemplo-provider'
 import { Sidebar } from '@/components/sidebar'
 import { Topbar } from '@/components/topbar'
+import { listarNotificacoes } from '@/lib/consultas/notificacoes'
 import { nomeDoPerfil, usuarioLogado } from '@/lib/consultas/sessao'
 
 export default async function LayoutApp({
@@ -16,6 +17,7 @@ export default async function LayoutApp({
   if (!usuario) redirect('/login')
 
   const nome = await nomeDoPerfil()
+  const notificacoes = await listarNotificacoes()
 
   return (
     <DadosExemploProvider>
@@ -25,7 +27,12 @@ export default async function LayoutApp({
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar nome={nome} email={usuario.email ?? ''} />
+          <Topbar
+            nome={nome}
+            email={usuario.email ?? ''}
+            ownerId={usuario.id}
+            notificacoes={notificacoes}
+          />
           <main className="flex-1 overflow-y-auto p-6">
             <div className="mx-auto flex max-w-7xl flex-col gap-6">{children}</div>
           </main>
