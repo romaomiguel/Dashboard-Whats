@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { listarEtiquetas } from '@/lib/consultas/etiquetas'
+import { buscarPreferencias } from '@/lib/consultas/preferencias'
 import { nomeDoPerfil, usuarioLogado } from '@/lib/consultas/sessao'
 import { EtiquetasCard } from './etiquetas-card'
 import { FormularioPerfil } from './formulario-perfil'
@@ -15,10 +16,11 @@ import { Preferencias } from './preferencias'
 export default async function Page() {
   // usuarioLogado e nomeDoPerfil já foram resolvidos pelo layout nesta mesma
   // requisição; aqui saem do cache, sem nova ida ao Supabase.
-  const [usuario, nome, etiquetas] = await Promise.all([
+  const [usuario, nome, etiquetas, preferencias] = await Promise.all([
     usuarioLogado(),
     nomeDoPerfil(),
     listarEtiquetas(),
+    buscarPreferencias(),
   ])
 
   if (!usuario) redirect('/login')
@@ -39,7 +41,7 @@ export default async function Page() {
         <EtiquetasCard etiquetas={etiquetas} />
       </div>
 
-      <Preferencias />
+      <Preferencias preferencias={preferencias} />
     </div>
   )
 }

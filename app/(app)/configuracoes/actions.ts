@@ -1,8 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { criarClienteServidor } from '@/lib/supabase/server'
 import { ehCorValida, LIMITE_NOME_ETIQUETA } from '@/lib/etiquetas'
+import { PREFERENCIA_POR_TIPO, type TipoNotificacao } from '@/lib/notificacoes'
+import { criarClienteServidor } from '@/lib/supabase/server'
 
 export type EstadoPerfil = { erro?: string; ok?: boolean }
 export type EstadoEtiqueta = { erro?: string; ok?: boolean }
@@ -87,5 +88,34 @@ export async function excluirEtiqueta(id: string): Promise<EstadoEtiqueta> {
   if (error) return { erro: 'Não foi possível excluir. Tente de novo.' }
 
   revalidatePath('/', 'layout')
+  return { ok: true }
+}
+
+export type EstadoPreferencia = { erro?: string; ok?: boolean }
+
+/**
+ * Liga ou desliga um tipo de notificação.
+ *
+ * O tipo vira nome de coluna, então a validação contra PREFERENCIA_POR_TIPO
+ * não é formalidade: sem ela, uma string da tela viraria identificador SQL.
+ */
+export async function salvarPreferencia(
+  tipo: TipoNotificacao,
+  ligado: boolean,
+): Promise<EstadoPreferencia> {
+  const coluna = PREFERENCIA_POR_TIPO[tipo]
+  if (!coluna) return { erro: 'Tipo de notificação desconhecido.' }
+
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ [coluna]: ligado })
+    .eq('id', user.id)
+
+  if (error) return { erro: 'Não foi possível salvar a preferência.' }
+
+  revalidatePath('/configuracoes')
   return { ok: true }
 }

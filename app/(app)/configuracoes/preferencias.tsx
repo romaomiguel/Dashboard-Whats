@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useTransition } from 'react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   Card,
@@ -10,29 +11,64 @@ import {
 } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import type { Preferencias as PreferenciasSalvas } from '@/lib/consultas/preferencias'
+import type { TipoNotificacao } from '@/lib/notificacoes'
+import { salvarPreferencia } from './actions'
 
-const notificacoes = [
+const NOTIFICACOES: {
+  tipo: TipoNotificacao
+  chave: keyof PreferenciasSalvas
+  label: string
+  desc: string
+}[] = [
   {
-    id: 'novas-msg',
+    tipo: 'mensagem',
+    chave: 'notificar_mensagem',
     label: 'Novas mensagens',
     desc: 'Receber alerta a cada nova conversa',
-    ligado: true,
   },
   {
-    id: 'disparos',
+    tipo: 'disparo',
+    chave: 'notificar_disparo',
     label: 'Status de disparos',
     desc: 'Notificar ao concluir uma campanha',
-    ligado: true,
   },
   {
-    id: 'conexao',
+    tipo: 'conexao',
+    chave: 'notificar_conexao',
     label: 'Queda de conexão',
     desc: 'Avisar quando uma instância cair',
-    ligado: false,
   },
 ]
 
-export function Preferencias() {
+export function Preferencias({
+  preferencias,
+}: {
+  preferencias: PreferenciasSalvas
+}) {
+  const [valores, setValores] = useState(preferencias)
+  const [salvando, iniciarSalvamento] = useTransition()
+  const [erro, setErro] = useState('')
+
+  function alternar(
+    tipo: TipoNotificacao,
+    chave: keyof PreferenciasSalvas,
+    ligado: boolean,
+  ) {
+    setErro('')
+    // Move na hora e desfaz se falhar: preferência é interruptor, não
+    // formulário — esperar o servidor para reagir parece travado.
+    setValores((atual) => ({ ...atual, [chave]: ligado }))
+
+    iniciarSalvamento(async () => {
+      const resultado = await salvarPreferencia(tipo, ligado)
+      if (resultado.erro) {
+        setValores((atual) => ({ ...atual, [chave]: !ligado }))
+        setErro(resultado.erro)
+      }
+    })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -50,22 +86,38 @@ export function Preferencias() {
         <CardHeader>
           <CardTitle className="text-base">Notificações</CardTitle>
           <CardDescription>
-            Escolha o que deseja acompanhar — a entrega das notificações chega na
-            Entrega 2.
+            Escolha o que aparece no sino. Desligado, a notificação não chega a
+            ser criada.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          {notificacoes.map((n) => (
-            <div key={n.id} className="flex items-center justify-between gap-4">
+          {NOTIFICACOES.map((n) => (
+            <div key={n.tipo} className="flex items-center justify-between gap-4">
               <div>
-                <Label htmlFor={n.id} className="text-sm font-medium text-foreground">
+                <Label
+                  htmlFor={n.tipo}
+                  className="text-sm font-medium text-foreground"
+                >
                   {n.label}
                 </Label>
                 <p className="text-xs text-muted-foreground">{n.desc}</p>
               </div>
-              <Switch id={n.id} defaultChecked={n.ligado} />
+              <Switch
+                id={n.tipo}
+                checked={valores[n.chave]}
+                disabled={salvando}
+                onCheckedChange={(ligado) =>
+                  alternar(n.tipo, n.chave, Boolean(ligado))
+                }
+              />
             </div>
           ))}
+
+          {erro && (
+            <p role="alert" className="text-sm text-destructive">
+              {erro}
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
