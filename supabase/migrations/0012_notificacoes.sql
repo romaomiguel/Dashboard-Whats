@@ -17,7 +17,11 @@ create table public.notificacoes (
   constraint notificacao_unica_por_dono unique (owner_id, chave)
 );
 
--- Ordena por atualizado_em: conversa antiga com mensagem nova sobe ao topo.
+-- Corrigido pela 0013: com `lida` no meio da chave, o Postgres agrupa por
+-- lida antes de ordenar por atualizado_em, e a listagem do sino não filtra
+-- por lida — não satisfazia o `order by` dela. A 0013 derruba este índice e
+-- cria (owner_id, atualizado_em desc), que serve a listagem e ainda cobre a
+-- retenção pelo prefixo do dono mais a faixa de data.
 create index notificacoes_sino_idx
   on public.notificacoes (owner_id, lida, atualizado_em desc);
 
