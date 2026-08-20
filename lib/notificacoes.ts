@@ -29,6 +29,9 @@ export const DIAS_RETENCAO = 30
 /** Corpo mais longo que isto vira parede de texto no painel. */
 const LIMITE_CORPO = 120
 
+/** Espelha o `check (length(trim(titulo)) between 1 and 120)` da 0012. */
+const LIMITE_TITULO = 120
+
 export type EventoNotificavel =
   | { tipo: 'mensagem'; numero: string; nome: string | null; texto: string }
   | { tipo: 'disparo'; id: string; nome: string; enviados: number; total: number }
@@ -49,6 +52,23 @@ function encurtar(texto: string): string {
 }
 
 /**
+ * Monta "<quem> <sufixo>" garantindo que caiba no `check` de 120 do banco.
+ *
+ * `contatos.nome` (migration 0003) vai até 120 caracteres, então "Nome
+ * respondeu" sozinho já pode passar de 120 — sem truncar aqui o insert
+ * falharia em produção com 23514. `disparos.nome` (60) e `instances.nome`
+ * (40) nunca chegam perto do limite, então só o ramo de mensagem precisa
+ * disto.
+ */
+function truncarTitulo(quem: string, sufixo: string): string {
+  const titulo = `${quem} ${sufixo}`
+  if (titulo.length <= LIMITE_TITULO) return titulo
+
+  const limiteQuem = LIMITE_TITULO - sufixo.length - 2 // reticências + espaço
+  return `${quem.slice(0, limiteQuem)}… ${sufixo}`
+}
+
+/**
  * Traduz um evento do sistema em notificação.
  *
  * Função pura de propósito: é aqui que mora todo o texto que o usuário lê, e
@@ -62,7 +82,7 @@ export function montarNotificacao(evento: EventoNotificavel): NotificacaoMontada
     return {
       tipo: 'mensagem',
       chave: `mensagem:${numero}`,
-      titulo: `${evento.nome ?? numero} respondeu`,
+      titulo: truncarTitulo(evento.nome ?? numero, 'respondeu'),
       corpo: encurtar(evento.texto),
       destino: `/mensagens?busca=${encodeURIComponent(numero)}`,
     }

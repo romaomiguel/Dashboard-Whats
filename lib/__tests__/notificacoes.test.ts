@@ -50,13 +50,33 @@ describe('montarNotificacao — mensagem', () => {
   })
 
   it('corta corpo longo, para o painel não virar parede de texto', () => {
+    const textoOriginal = 'a'.repeat(200)
     const n = montarNotificacao({
       tipo: 'mensagem',
       numero: '556584627628',
       nome: 'Amanda',
-      texto: 'a'.repeat(200),
+      texto: textoOriginal,
     })
+    // Não basta caber em 120: precisa preservar o começo do texto original
+    // (senão string vazia ou texto fixo também passaria) e marcar o corte.
     expect(n.corpo!.length).toBeLessThanOrEqual(120)
+    expect(n.corpo!.startsWith(textoOriginal.slice(0, 50))).toBe(true)
+    expect(n.corpo).toMatch(/…$/)
+  })
+
+  it('nome de contato no limite de 120 não estoura o título', () => {
+    // contatos.nome (migration 0003) vai até 120 — "Nome respondeu" sozinho
+    // já passaria do check de 120 em notificacoes (migration 0012).
+    const nomeLongo = 'Amanda'.repeat(20) // 120 caracteres
+    const n = montarNotificacao({
+      tipo: 'mensagem',
+      numero: '556584627628',
+      nome: nomeLongo,
+      texto: 'Oi',
+    })
+    expect(n.titulo.length).toBeLessThanOrEqual(120)
+    expect(n.titulo.startsWith(nomeLongo.slice(0, 30))).toBe(true)
+    expect(n.titulo).toMatch(/… respondeu$/)
   })
 
   it('leva o número na busca do destino', () => {
