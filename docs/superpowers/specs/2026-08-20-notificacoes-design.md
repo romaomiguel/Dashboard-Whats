@@ -1,7 +1,7 @@
 # Notificações — sino ao vivo e preferências
 
 **Data:** 2026-08-20
-**Status:** aprovada
+**Status:** entregue em 2026-08-20
 
 ## Contexto
 

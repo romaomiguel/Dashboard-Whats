@@ -79,3 +79,7 @@ Entrega 1 (Fundação) concluída: autenticação, banco multi-tenant com RLS,
 navegação entre as sete telas, camada tipada de acesso à Evolution e
 receptor de webhook. As telas já mostram a interface completa, mas ainda
 sobre dados de exemplo — ligar a Evolution de verdade é a Entrega 2.
+
+O sino da topbar avisa ao vivo sobre mensagem recebida, campanha concluída e
+queda de conexão, pelo Realtime do Supabase. Cada tipo é controlado pelo seu
+interruptor em Configurações, e desligado significa não criar.

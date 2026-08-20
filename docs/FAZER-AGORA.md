@@ -90,6 +90,44 @@ junto, e apaga as que já ficaram órfãs.
 
 ---
 
+## Passo 0d — Rodar as migrations 0012 e 0013 (notificações)
+
+> Já rodadas neste ambiente. Fica aqui para quem for aplicar em outro Supabase.
+
+**Onde:** Supabase → SQL Editor. Cole e rode, nesta ordem, o conteúdo de
+`supabase/migrations/0012_notificacoes.sql` e depois
+`supabase/migrations/0013_indice_sino.sql`.
+
+A 0012 cria a tabela de notificações, publica ela no Realtime e acrescenta as
+três preferências ao perfil. A 0013 troca o índice: o da 0012 tinha `lida` no
+meio da chave, o que quebrava a ordenação por `atualizado_em` que a listagem
+do sino usa — o índice não servia ao `order by` dela.
+
+O `alter publication supabase_realtime add table`, na 0012, é a linha que mais
+importa: sem ela o sino funciona, mas só atualiza quando você troca de tela.
+Não dá erro — simplesmente não chega nada ao vivo. O roteiro do Passo 0e prova
+isso na prática.
+
+---
+
+## Passo 0e — Verificar o sino de notificações na mão
+
+Com as duas migrations rodadas e o deploy no ar:
+
+1. Abrir o painel e conferir que o sino aparece sem contador
+2. Mandar mensagem de outro celular para o número conectado
+3. **Sem recarregar**, o contador deve subir sozinho — é isso que prova o
+   Realtime; se só aparecer depois de trocar de tela, a publicação da 0012
+   não foi aplicada
+4. Abrir o painel: a notificação traz nome e prévia
+5. Clicar: vai para Mensagens com a busca preenchida, e o contador cai
+6. Em Configurações, desligar "Novas mensagens"
+7. Mandar outra mensagem: a conversa aparece em Mensagens, mas **nenhuma**
+   notificação é criada
+8. Religar e conferir que volta a notificar
+
+---
+
 ## Passo 0b — Rodar a migration 0010
 
 **Onde:** Supabase → SQL Editor
