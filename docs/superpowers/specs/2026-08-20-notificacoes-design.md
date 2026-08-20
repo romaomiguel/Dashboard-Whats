@@ -116,7 +116,6 @@ relatam o que aconteceu; nenhum deles sabe o que é uma preferência.
 | Origem | Gatilho | Título | Destino |
 |---|---|---|---|
 | `app/api/webhooks/evolution/[segredo]/route.ts` | `MESSAGES_UPSERT` de entrada | `<nome> respondeu` | `/mensagens?busca=<numero>` |
-
 | `app/api/webhooks/evolution/[segredo]/route.ts` | `CONNECTION_UPDATE` para `close` **vindo de conectada** | `<conexão> desconectou` | `/conexao` |
 | `lib/disparos/processador.ts` | campanha muda para concluído | `<campanha> concluída` | `/disparos` |
 
