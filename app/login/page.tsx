@@ -51,10 +51,10 @@ export default async function LoginPage({
             <p className="text-sm font-semibold text-foreground">ZapCRM</p>
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             Entrar na conta
           </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-2 text-base text-muted-foreground">
             Acesse o painel com seu e-mail e senha.
           </p>
 

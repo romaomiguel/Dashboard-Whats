@@ -40,7 +40,10 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} bg-background`}
       suppressHydrationWarning
     >
-      <body className="font-sans antialiased">
+      {/* suppressHydrationWarning no body também: extensões de navegador
+          (ColorZilla e afins) escrevem atributos nele antes do React hidratar,
+          e o do <html> não cobre descendentes. */}
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

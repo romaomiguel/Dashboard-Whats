@@ -55,3 +55,18 @@ describe('mostrar senha', () => {
     expect(oculto).toHaveValue('/contatos')
   })
 })
+
+describe('tamanho dos campos', () => {
+  it('usa campos altos e texto legível, não os compactos do padrão', () => {
+    render(<FormularioLogin acao={async () => ({})} />)
+
+    for (const campo of [screen.getByLabelText('E-mail'), screen.getByLabelText('Senha')]) {
+      expect(campo.className).toContain('h-11')
+      expect(campo.className).toContain('text-base')
+      // h-8 é o padrão compacto do design system; aqui ele não serve.
+      expect(campo.className).not.toMatch(/\bh-8\b/)
+    }
+
+    expect(screen.getByRole('button', { name: 'Entrar' }).className).toContain('h-11')
+  })
+})
