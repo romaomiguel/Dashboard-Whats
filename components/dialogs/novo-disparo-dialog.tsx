@@ -1,6 +1,10 @@
 'use client'
 
-import { Plus, Send } from 'lucide-react'
+import { useActionState, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useFormStatus } from 'react-dom'
+import { Loader2, Plus, Send } from 'lucide-react'
+import { criarDisparo, type EstadoDisparo } from '@/app/(app)/disparos/actions'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,7 +18,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -22,10 +25,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useDadosExemplo } from '@/components/dados-exemplo-provider'
+import { Textarea } from '@/components/ui/textarea'
 import type { Conexao } from '@/lib/conexoes'
-import { conexoes as conexoesExemplo } from '@/lib/data'
+import {
+  LIMITE_MENSAGEM,
+  LIMITE_NOME_DISPARO,
+  MINUTOS_AGORA,
+} from '@/lib/disparos'
 import type { Etiqueta } from '@/lib/etiquetas'
+
+function BotaoCriar() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" className="gap-2" disabled={pending}>
+      {pending ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : (
+        <Send className="size-4" />
+      )}
+      {pending ? 'Criando...' : 'Criar disparo'}
+    </Button>
+  )
+}
 
 export function NovoDisparoDialog({
   etiquetas,
@@ -34,33 +55,47 @@ export function NovoDisparoDialog({
   etiquetas: Etiqueta[]
   conexoes: Conexao[]
 }) {
-  const { mostrarExemplo } = useDadosExemplo()
-
-  // Conexão de verdade manda. Só quem ainda não conectou nenhum aparelho vê
-  // as de exemplo — e elas somem ao zerar o selo.
-  const listaConexoes =
-    conexoes.length > 0
-      ? conexoes.map((c) => ({ chave: c.id, rotulo: c.nome }))
-      : mostrarExemplo
-        ? conexoesExemplo.map((c) => ({ chave: c.numero, rotulo: c.nome }))
-        : []
-
-  // items mapeia valor -> rótulo. Sem ele o Base UI mostra no gatilho o valor
-  // cru: 'todos' em minúsculo e o uuid da etiqueta em vez do nome.
-  const itensConexao = Object.fromEntries(
-    listaConexoes.map((c) => [c.chave, c.rotulo]),
+  const router = useRouter()
+  const [aberto, setAberto] = useState(false)
+  const [conexao, setConexao] = useState('')
+  const [publico, setPublico] = useState('todos')
+  const [quando, setQuando] = useState('agora')
+  const [estado, enviar] = useActionState<EstadoDisparo, FormData>(
+    criarDisparo,
+    {},
   )
+
+  useEffect(() => {
+    if (estado.ok) {
+      setAberto(false)
+      setConexao('')
+      setPublico('todos')
+      setQuando('agora')
+      router.refresh()
+    }
+  }, [estado, router])
+
+  // Só conexão conectada dispara; oferecer as outras levaria a um erro que o
+  // usuário só descobriria depois de preencher tudo.
+  const disponiveis = conexoes.filter((c) => c.status === 'conectada')
+
+  const itensConexao = Object.fromEntries(disponiveis.map((c) => [c.id, c.nome]))
   const itensPublico = {
     todos: 'Todos os contatos',
     ...Object.fromEntries(etiquetas.map((e) => [e.id, e.nome])),
   }
+  const itensQuando = {
+    agora: `Agora (em ${MINUTOS_AGORA} minuto)`,
+    agendar: 'Agendar data e hora',
+  }
 
   return (
-    <Dialog>
+    <Dialog open={aberto} onOpenChange={setAberto}>
       <DialogTrigger render={<Button className="gap-2" />}>
         <Plus className="size-4" />
         Novo disparo
       </DialogTrigger>
+
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Novo disparo</DialogTitle>
@@ -68,72 +103,144 @@ export function NovoDisparoDialog({
             Configure uma nova campanha de mensagens em massa.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="disparo-nome">Nome da campanha</Label>
-            <Input id="disparo-nome" placeholder="Ex: Promoção de Natal" />
+
+        {disponiveis.length === 0 ? (
+          <div className="flex flex-col gap-4">
+            <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+              Nenhuma conexão conectada. Conecte um WhatsApp em Conexão antes de
+              disparar.
+            </p>
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>
+                Fechar
+              </DialogClose>
+            </DialogFooter>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+        ) : (
+          <form action={enviar} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="disparo-conexao">Conexão</Label>
-              {listaConexoes.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
-                  Nenhuma conexão. Conecte um WhatsApp em Conexão.
-                </p>
-              ) : (
-              <Select items={itensConexao}>
-                <SelectTrigger id="disparo-conexao">
-                  <SelectValue placeholder="Selecionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {listaConexoes.map((c) => (
-                    <SelectItem key={c.chave} value={c.chave}>
-                      {c.rotulo}
+              <Label htmlFor="disparo-nome">Nome da campanha</Label>
+              <Input
+                id="disparo-nome"
+                name="nome"
+                placeholder="Ex: Promoção de Natal"
+                maxLength={LIMITE_NOME_DISPARO}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="disparo-conexao">Conexão</Label>
+                <input type="hidden" name="conexao" value={conexao} />
+                <Select
+                  items={itensConexao}
+                  value={conexao}
+                  onValueChange={(v) => setConexao(String(v ?? ''))}
+                >
+                  <SelectTrigger id="disparo-conexao">
+                    <SelectValue placeholder="Selecionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {disponiveis.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="disparo-publico">Público</Label>
+                <input type="hidden" name="publico" value={publico} />
+                <Select
+                  items={itensPublico}
+                  value={publico}
+                  onValueChange={(v) => setPublico(String(v ?? 'todos'))}
+                >
+                  <SelectTrigger id="disparo-publico">
+                    <SelectValue placeholder="Selecionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os contatos</SelectItem>
+                    {etiquetas.map((etiqueta) => (
+                      <SelectItem key={etiqueta.id} value={etiqueta.id}>
+                        {etiqueta.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="disparo-msg">Mensagem</Label>
+              <Textarea
+                id="disparo-msg"
+                name="mensagem"
+                rows={4}
+                maxLength={LIMITE_MENSAGEM}
+                placeholder="Escreva a mensagem que será enviada..."
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="disparo-quando">Envio</Label>
+                <input type="hidden" name="quando" value={quando} />
+                <Select
+                  items={itensQuando}
+                  value={quando}
+                  onValueChange={(v) => setQuando(String(v ?? 'agora'))}
+                >
+                  <SelectTrigger id="disparo-quando">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="agora">
+                      Agora (em {MINUTOS_AGORA} minuto)
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    <SelectItem value="agendar">Agendar data e hora</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {quando === 'agendar' && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="disparo-data">Data e hora</Label>
+                  <Input
+                    id="disparo-data"
+                    name="agendado_para"
+                    type="datetime-local"
+                    required
+                  />
+                </div>
               )}
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="disparo-publico">Público</Label>
-              <Select items={itensPublico}>
-                <SelectTrigger id="disparo-publico">
-                  <SelectValue placeholder="Selecionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os contatos</SelectItem>
-                  {/* Público sai das etiquetas que o usuário cadastrou; a
-                      lista fixa de antes citava grupos que não existiam. */}
-                  {etiquetas.map((etiqueta) => (
-                    <SelectItem key={etiqueta.id} value={etiqueta.id}>
-                      {etiqueta.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="disparo-msg">Mensagem</Label>
-            <Textarea
-              id="disparo-msg"
-              rows={4}
-              placeholder="Escreva a mensagem que será enviada..."
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="disparo-data">Agendar envio</Label>
-            <Input id="disparo-data" type="datetime-local" />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-          <DialogClose render={<Button className="gap-2" />}>
-            <Send className="size-4" />
-            Criar disparo
-          </DialogClose>
-        </DialogFooter>
+
+            {quando === 'agora' && (
+              <p className="text-xs text-muted-foreground">
+                O envio começa em {MINUTOS_AGORA} minuto, para dar tempo de
+                cancelar caso algo esteja errado.
+              </p>
+            )}
+
+            {estado.erro && (
+              <p role="alert" className="text-sm text-destructive">
+                {estado.erro}
+              </p>
+            )}
+
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>
+                Cancelar
+              </DialogClose>
+              <BotaoCriar />
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -1,7 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export const ROTAS_PUBLICAS = ['/login', '/api/webhooks']
+// /api/disparos é chamada por agendador externo, sem sessão; ela se
+// protege pelo WEBHOOK_SECRET na query.
+export const ROTAS_PUBLICAS = ['/login', '/api/webhooks', '/api/disparos']
 
 /**
  * Para onde voltar depois do login: caminho mais query, nunca a origem.

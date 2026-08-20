@@ -45,7 +45,13 @@ describe.skipIf(!configurado)('RLS de instances', () => {
     await admin.from('instances').delete().eq('owner_id', ownerA)
     const { data, error } = await admin
       .from('instances')
-      .insert({ owner_id: ownerA, evolution_name: nomeDeTeste() })
+      // nome virou obrigatório e único por usuário na migration 0005; o
+      // sufixo aleatório evita colisão entre rodadas que não limparam.
+      .insert({
+        owner_id: ownerA,
+        nome: `Teste ${Date.now()}`,
+        evolution_name: nomeDeTeste(),
+      })
       .select('id')
       .single()
     if (error) throw new Error(error.message)
