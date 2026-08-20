@@ -20,13 +20,27 @@ export type OpcoesChamada = {
 function lerConfig() {
   const url = process.env.EVOLUTION_API_URL
   const apikey = process.env.EVOLUTION_API_KEY
-  if (!url) {
-    throw new EvolutionError('configuracao', 'EVOLUTION_API_URL não configurada')
+
+  const faltando = [
+    !url && 'EVOLUTION_API_URL',
+    !apikey && 'EVOLUTION_API_KEY',
+  ].filter(Boolean) as string[]
+
+  if (faltando.length > 0) {
+    // Só os nomes das chaves presentes, nunca os valores: o suficiente para
+    // distinguir "variável não chegou ao deploy" de "nome digitado errado".
+    const presentes = Object.keys(process.env)
+      .filter((chave) => chave.startsWith('EVOLUTION'))
+      .join(', ')
+
+    console.error(
+      `[evolution] faltando: ${faltando.join(', ')}. Chaves EVOLUTION vistas pelo processo: ${presentes || 'nenhuma'}`,
+    )
+
+    throw new EvolutionError('configuracao', faltando.join(' e '))
   }
-  if (!apikey) {
-    throw new EvolutionError('configuracao', 'EVOLUTION_API_KEY não configurada')
-  }
-  return { url: url.replace(/\/+$/, ''), apikey }
+
+  return { url: url!.replace(/\/+$/, ''), apikey: apikey! }
 }
 
 export async function chamar<T>(

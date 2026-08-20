@@ -41,7 +41,10 @@ function mensagemEvolution(erro: unknown): string {
 
   if (erro instanceof EvolutionError) {
     if (erro.kind === 'configuracao') {
-      return 'A Evolution API não está configurada no .env.'
+      // Nomear a variável que falta poupa uma rodada de tentativa e erro.
+      // Na Vercel, variável nova só vale a partir do próximo deploy — o
+      // deploy em execução continua com o ambiente com que foi construído.
+      return `Falta ${erro.message} no ambiente do servidor. Na Vercel: Settings › Environment Variables, confira o escopo (Production x Preview) e refaça o deploy — variável nova não entra em deploy já publicado.`
     }
     if (erro.kind === 'rede') {
       return 'A Evolution API não respondeu. No plano free do Render ela hiberna e leva até 90 segundos para acordar — tente de novo.'

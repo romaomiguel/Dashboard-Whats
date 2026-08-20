@@ -121,3 +121,31 @@ describe('chamar', () => {
     await expect(chamar('/qualquer')).rejects.toBeInstanceOf(EvolutionError)
   })
 })
+
+describe('configuração ausente', () => {
+  it('diz qual variável falta, não um genérico "não configurada"', async () => {
+    const url = process.env.EVOLUTION_API_URL
+    delete process.env.EVOLUTION_API_URL
+
+    await expect(chamar('/qualquer')).rejects.toMatchObject({
+      kind: 'configuracao',
+      message: 'EVOLUTION_API_URL',
+    })
+
+    process.env.EVOLUTION_API_URL = url
+  })
+
+  it('nomeia as duas quando as duas faltam', async () => {
+    const url = process.env.EVOLUTION_API_URL
+    const key = process.env.EVOLUTION_API_KEY
+    delete process.env.EVOLUTION_API_URL
+    delete process.env.EVOLUTION_API_KEY
+
+    await expect(chamar('/qualquer')).rejects.toMatchObject({
+      message: 'EVOLUTION_API_URL e EVOLUTION_API_KEY',
+    })
+
+    process.env.EVOLUTION_API_URL = url
+    process.env.EVOLUTION_API_KEY = key
+  })
+})
