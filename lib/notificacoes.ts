@@ -106,3 +106,16 @@ export function montarNotificacao(evento: EventoNotificavel): NotificacaoMontada
     destino: '/conexao',
   }
 }
+
+/**
+ * Se uma mudança de estado merece avisar que a conexão caiu.
+ *
+ * A condição de vir de conectada existe porque toda instância nasce fechada:
+ * sem ela, criar uma conexão avisaria queda antes de o QR ser lido.
+ */
+export function deveNotificarQueda(
+  estadoAnterior: string,
+  estadoNovo: string,
+): boolean {
+  return estadoAnterior === 'conectada' && estadoNovo === 'close'
+}

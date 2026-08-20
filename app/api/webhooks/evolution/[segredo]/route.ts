@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { numeroDoContato, type ChaveMensagem } from '@/lib/evolution/jid'
 import { criarClienteAdmin } from '@/lib/supabase/admin'
 import type { EventoWebhook } from '@/lib/evolution/types'
+import { registrarNotificacao } from '@/lib/notificacoes/registrar'
+import { deveNotificarQueda } from '@/lib/notificacoes'
 
 /** Texto da mensagem, nas formas que a Evolution usa conforme o tipo. */
 function textoDaMensagem(dados: unknown): string | null {
@@ -132,6 +134,47 @@ async function registrarRecebida(evento: EventoWebhook) {
   if (error) {
     console.error('[webhook] não gravou a mensagem:', error.code, error.message)
   }
+
+  // Só resposta de contato vira notificação: o que sai do próprio número não
+  // é novidade para quem enviou.
+  if (!daPropriaConta) {
+    await registrarNotificacao(admin, String(instancia.owner_id), {
+      tipo: 'mensagem',
+      numero,
+      nome: dados.pushName ?? null,
+      texto,
+    })
+  }
+}
+
+/** Avisa quando uma conexão que estava no ar cai. */
+async function registrarQueda(evento: EventoWebhook) {
+  const dados = evento.data as { state?: string; statusReason?: number } | null
+  const estadoNovo = String(dados?.state ?? '')
+
+  const admin = criarClienteAdmin()
+
+  const { data: instancia } = await admin
+    .from('instances')
+    .select('id, owner_id, nome, status')
+    .eq('evolution_name', evento.instance)
+    .maybeSingle()
+
+  if (!instancia) return
+  if (!deveNotificarQueda(String(instancia.status), estadoNovo)) return
+
+  // O banco precisa refletir a queda, senão a tela seguiria dizendo conectada
+  // até alguém abrir Conexão.
+  await admin
+    .from('instances')
+    .update({ status: 'desconectada', atualizado_em: new Date().toISOString() })
+    .eq('id', instancia.id)
+
+  await registrarNotificacao(admin, String(instancia.owner_id), {
+    tipo: 'conexao',
+    id: String(instancia.id),
+    nome: String(instancia.nome),
+  })
 }
 
 export const dynamic = 'force-dynamic'
@@ -168,6 +211,7 @@ export async function POST(
     const tipo = evento.event.toUpperCase().replace('.', '_')
     if (tipo === 'MESSAGES_UPSERT') await registrarRecebida(evento)
     if (tipo === 'MESSAGES_UPDATE') await registrarRecibo(evento)
+    if (tipo === 'CONNECTION_UPDATE') await registrarQueda(evento)
   } catch (erro) {
     console.error('[webhook] falha ao processar evento:', erro)
   }

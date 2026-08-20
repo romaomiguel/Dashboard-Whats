@@ -2,6 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { chamar } from '@/lib/evolution/client'
 import { endpoints } from '@/lib/evolution/endpoints'
+import { registrarNotificacao } from '@/lib/notificacoes/registrar'
 
 /**
  * Quantas mensagens saem por execução.
@@ -132,15 +133,37 @@ export async function processarLote(
     contar('pendente'),
   ])
 
+  const concluiu = restantes === 0
+
   await db
     .from('disparos')
     .update({
       enviados: totalEnviados,
       falhas: totalFalhas,
-      status: restantes > 0 ? 'enviando' : 'concluido',
+      status: concluiu ? 'concluido' : 'enviando',
       atualizado_em: new Date().toISOString(),
     })
     .eq('id', disparo.id)
+
+  // Só na virada para concluído: notificar a cada lote encheria o sino de
+  // repetição da mesma campanha.
+  if (concluiu) {
+    const { data: campanha } = await db
+      .from('disparos')
+      .select('nome, total')
+      .eq('id', disparo.id)
+      .maybeSingle()
+
+    if (campanha) {
+      await registrarNotificacao(db, String(instancia.owner_id), {
+        tipo: 'disparo',
+        id: disparo.id,
+        nome: String(campanha.nome),
+        enviados: totalEnviados,
+        total: Number(campanha.total),
+      })
+    }
+  }
 
   return { disparo: disparo.id, enviados, falhas, restantes }
 }
