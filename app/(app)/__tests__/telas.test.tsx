@@ -9,7 +9,7 @@ import ConexaoPage from '@/app/(app)/conexao/page'
 import { ListaContatos } from '@/app/(app)/contatos/lista-contatos'
 import { ListaDisparos } from '@/app/(app)/disparos/lista-disparos'
 import { ListaConversas } from '@/app/(app)/mensagens/lista-conversas'
-import MidiasPage from '@/app/(app)/midias/page'
+import { ListaMidias } from '@/app/(app)/midias/lista-midias'
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
@@ -135,13 +135,15 @@ describe('Disparos', () => {
 
 describe('Mídias', () => {
   it('lista os arquivos de exemplo', async () => {
-    montar(<MidiasPage />)
+    montar(<ListaMidias midias={[]} />)
     expect(await screen.findByText('catalogo-2026.pdf')).toBeInTheDocument()
-    expect(screen.getByText('6 arquivos na biblioteca de mídias')).toBeInTheDocument()
+    expect(
+      screen.getByText('6 arquivos de exemplo na biblioteca'),
+    ).toBeInTheDocument()
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<MidiasPage />)
+    await comExemploDesligado(<ListaMidias midias={[]} />)
     expect(screen.getByText('Biblioteca vazia')).toBeInTheDocument()
   })
 })
@@ -206,5 +208,36 @@ describe('contatos salvos', () => {
       />,
     )
     expect(await screen.findByText('sem etiqueta')).toBeInTheDocument()
+  })
+})
+
+describe('mídias salvas', () => {
+  const salvas = [
+    {
+      id: 'm1',
+      nome: 'contrato.pdf',
+      tipo: 'documento' as const,
+      tamanho: 2_400_000,
+      legenda: null,
+      criadoEm: '2026-08-20T10:00:00.000Z',
+    },
+  ]
+
+  it('assim que existe mídia real, o exemplo some da grade', async () => {
+    montar(<ListaMidias midias={salvas} />)
+    expect(await screen.findByText('contrato.pdf')).toBeInTheDocument()
+    expect(screen.queryByText('catalogo-2026.pdf')).not.toBeInTheDocument()
+  })
+
+  it('mostra o tamanho legível, não o número de bytes', async () => {
+    montar(<ListaMidias midias={salvas} />)
+    expect(await screen.findByText('2,3 MB')).toBeInTheDocument()
+  })
+
+  it('só a mídia real oferece exclusão; a de exemplo não', async () => {
+    montar(<ListaMidias midias={salvas} />)
+    expect(
+      await screen.findByRole('button', { name: 'Excluir contrato.pdf' }),
+    ).toBeInTheDocument()
   })
 })

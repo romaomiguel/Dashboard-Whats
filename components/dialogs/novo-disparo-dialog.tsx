@@ -22,13 +22,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { conexoes } from '@/lib/data'
 import type { Etiqueta } from '@/lib/etiquetas'
 
 export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
+  const { mostrarExemplo } = useDadosExemplo()
+
+  // Conexão real só existe a partir da Entrega 2. Até lá a lista vem do
+  // exemplo — e some junto com ele ao zerar, em vez de oferecer quatro
+  // aparelhos que não existem.
+  const listaConexoes = mostrarExemplo ? conexoes : []
+
   // items mapeia valor -> rótulo. Sem ele o Base UI mostra no gatilho o valor
   // cru: 'todos' em minúsculo e o uuid da etiqueta em vez do nome.
-  const itensConexao = Object.fromEntries(conexoes.map((c) => [c.numero, c.nome]))
+  const itensConexao = Object.fromEntries(
+    listaConexoes.map((c) => [c.numero, c.nome]),
+  )
   const itensPublico = {
     todos: 'Todos os contatos',
     ...Object.fromEntries(etiquetas.map((e) => [e.id, e.nome])),
@@ -55,18 +65,24 @@ export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="disparo-conexao">Conexão</Label>
+              {listaConexoes.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                  Nenhuma conexão. Conecte um WhatsApp em Conexão.
+                </p>
+              ) : (
               <Select items={itensConexao}>
                 <SelectTrigger id="disparo-conexao">
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {conexoes.map((c) => (
+                  {listaConexoes.map((c) => (
                     <SelectItem key={c.numero} value={c.numero}>
                       {c.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="disparo-publico">Público</Label>
