@@ -65,3 +65,14 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: ERROR
+      # O Baileys despeja o objeto inteiro de cada evento, e o libsignal
+      # imprime "Closing session: SessionEntry" com privKey, rootKey e
+      # chainKey em texto claro. Não é erro — é rotação normal de chave da
+      # sessão —, mas escrever material de sessão no log do Render não tem
+      # por que acontecer. Isto silencia o que passa pelo logger do Baileys.
+      #
+      # As linhas "Closing session" vêm de console.log direto do libsignal e
+      # podem persistir: é falha conhecida do upstream, não da configuração.
+      # https://github.com/WhiskeySockets/Baileys/issues/1871
+      - key: LOG_BAILEYS
+        value: silent

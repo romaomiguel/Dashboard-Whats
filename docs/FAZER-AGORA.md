@@ -185,6 +185,33 @@ Rode o passo 2 outra vez para ver o quanto liberou.
 
 ---
 
+## Passo 4b — Calar o log do Render
+
+**Onde:** Render → `evolution-api` → Environment. Acrescente:
+
+```
+LOG_BAILEYS = silent
+```
+
+### Por que
+
+Aquelas páginas de `Closing session: SessionEntry` **não são erro**. É o
+protocolo do WhatsApp rodando a chave da sessão, coisa normal, e é uma
+[falha conhecida de log do Baileys](https://github.com/WhiskeySockets/Baileys/issues/1871)
+que o `LOG_LEVEL=ERROR` não silencia. Nada está quebrado.
+
+O que incomoda é o conteúdo: esses blocos trazem `privKey`, `rootKey` e
+`chainKey` **em texto claro**. É material da sessão do WhatsApp escrito no log
+do Render. Fica restrito a quem tem acesso ao seu painel — diferente do caso
+do passo 0, que era público — mas não tem por que estar ali.
+
+`LOG_BAILEYS=silent` corta o que passa pelo logger do Baileys, incluindo o
+despejo do objeto de cada mensagem. As linhas `Closing session` vêm de um
+`console.log` cru dentro do libsignal e podem continuar aparecendo: é limitação
+do upstream, não da configuração.
+
+---
+
 ## Passo 5 — Opcional: testar as duas variáveis de mensagem
 
 `DATABASE_SAVE_MESSAGE_UPDATE` é o maior gerador de linhas: cria uma para cada

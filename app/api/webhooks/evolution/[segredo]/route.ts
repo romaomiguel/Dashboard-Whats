@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { numeroDoContato, type ChaveMensagem } from '@/lib/evolution/jid'
 import { criarClienteAdmin } from '@/lib/supabase/admin'
 import type { EventoWebhook } from '@/lib/evolution/types'
 
@@ -73,16 +74,17 @@ async function registrarRecibo(evento: EventoWebhook) {
 /** Grava a mensagem recebida, para a tela de Mensagens ter o que mostrar. */
 async function registrarRecebida(evento: EventoWebhook) {
   const dados = evento.data as {
-    key?: { remoteJid?: string; fromMe?: boolean }
+    key?: ChaveMensagem
     pushName?: string
   } | null
 
   // Mensagem que o próprio número enviou já foi registrada pelo disparo.
   if (!dados?.key || dados.key.fromMe) return
 
-  const jid = String(dados.key.remoteJid ?? '')
-  // Grupo tem outro sufixo e não é conversa de contato.
-  if (!jid.endsWith('@s.whatsapp.net')) return
+  // Trata os dois endereçamentos do WhatsApp, o antigo e o LID; descarta
+  // grupo, transmissão e newsletter.
+  const numero = numeroDoContato(dados.key)
+  if (!numero) return
 
   const texto = textoDaMensagem(evento.data)
   if (!texto) return
@@ -100,7 +102,7 @@ async function registrarRecebida(evento: EventoWebhook) {
   await admin.from('mensagens').insert({
     owner_id: instancia.owner_id,
     instance_id: instancia.id,
-    numero: jid.split('@')[0],
+    numero,
     nome: dados.pushName ?? null,
     direcao: 'entrada',
     status: 'recebida',
