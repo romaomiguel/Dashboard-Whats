@@ -75,9 +75,15 @@ export async function desconectarInstancia(nome: string): Promise<void> {
   await chamar(endpoints.instancia.logout(nome), { metodo: 'DELETE' })
 }
 
-export async function removerInstancia(nome: string): Promise<void> {
+export async function removerInstancia(
+  nome: string,
+  opcoes: Pick<OpcoesChamada, 'timeoutMs'> = {},
+): Promise<void> {
   try {
-    await chamar(endpoints.instancia.deletar(nome), { metodo: 'DELETE' })
+    await chamar(endpoints.instancia.deletar(nome), {
+      ...opcoes,
+      metodo: 'DELETE',
+    })
   } catch (erro) {
     // Remover o que já não existe é sucesso.
     if (erro instanceof EvolutionError && erro.kind === 'instancia_inexistente') {

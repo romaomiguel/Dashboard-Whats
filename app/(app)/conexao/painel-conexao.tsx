@@ -16,6 +16,7 @@ import {
   Signal,
   Smartphone,
   Trash2,
+  Wrench,
 } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { EstadoVazio } from '@/components/estado-vazio'
@@ -42,6 +43,7 @@ import {
 } from '@/lib/conexoes'
 import {
   criarConexao,
+  limparOrfas,
   removerConexao,
   verificarConexao,
   type EstadoConexaoUi,
@@ -143,6 +145,8 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
   const [erro, setErro] = useState('')
   const [removendo, iniciarRemocao] = useTransition()
   const [conferindo, setConferindo] = useState(false)
+  const [limpando, setLimpando] = useState(false)
+  const [aviso, setAviso] = useState('')
   const [qrAberto, setQrAberto] = useState<{
     id: string
     nome: string
@@ -181,8 +185,31 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
     iniciarRemocao(async () => {
       const resultado = await removerConexao(id)
       if (resultado.erro) setErro(resultado.erro)
-      else router.refresh()
+      if (resultado.ok) router.refresh()
     })
+  }
+
+  // Instância que ficou na Evolution sem registro aqui continua tentando
+  // reconectar com o mesmo número, e sessão duplicada faz o WhatsApp deslogar
+  // o aparelho inteiro.
+  async function limpar() {
+    setErro('')
+    setAviso('')
+    setLimpando(true)
+    try {
+      const resultado = await limparOrfas()
+      if (resultado.erro) setErro(resultado.erro)
+      else {
+        setAviso(
+          resultado.removidas
+            ? `${resultado.removidas} instância(s) órfã(s) removida(s) da Evolution.`
+            : 'Nenhuma instância órfã encontrada.',
+        )
+        router.refresh()
+      }
+    } finally {
+      setLimpando(false)
+    }
   }
 
   return (
@@ -211,6 +238,21 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
             </Button>
           )}
 
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={limpando}
+            onClick={limpar}
+            title="Remove da Evolution instâncias sem registro aqui"
+          >
+            {limpando ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Wrench className="size-4" />
+            )}
+            Limpar órfãs
+          </Button>
+
           <NovaConexaoDialog
             aoCriar={(id, nome, qr) => setQrAberto({ id, nome, qr })}
           />
@@ -220,6 +262,12 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
       {erro && (
         <p role="alert" className="text-sm text-destructive">
           {erro}
+        </p>
+      )}
+
+      {aviso && (
+        <p role="status" className="text-sm text-primary">
+          {aviso}
         </p>
       )}
 

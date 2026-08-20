@@ -9,6 +9,7 @@ const acoes = vi.hoisted(() => ({
   qr: vi.fn(),
   verificar: vi.fn(),
   remover: vi.fn(),
+  limpar: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -20,6 +21,7 @@ vi.mock('@/app/(app)/conexao/actions', () => ({
   atualizarQr: (id: string) => acoes.qr(id),
   verificarConexao: (id: string) => acoes.verificar(id),
   removerConexao: (id: string) => acoes.remover(id),
+  limparOrfas: () => acoes.limpar(),
 }))
 
 const QR_FALSO = 'data:image/png;base64,iVBORw0KGgo='
@@ -41,6 +43,7 @@ beforeEach(() => {
   acoes.qr.mockResolvedValue({ ok: true, qr: QR_FALSO })
   acoes.verificar.mockResolvedValue({ ok: true, status: 'conectando' })
   acoes.remover.mockResolvedValue({ ok: true })
+  acoes.limpar.mockResolvedValue({ ok: true, removidas: 0 })
 })
 
 afterEach(() => {
@@ -179,5 +182,62 @@ describe('diálogo do QR', () => {
     await userEvent.click(screen.getByRole('button', { name: /Gerar novo código/ }))
 
     await waitFor(() => expect(acoes.qr).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('instâncias órfãs', () => {
+  // Instância que fica na Evolution sem registro aqui segue tentando
+  // reconectar com o mesmo número, e sessão duplicada faz o WhatsApp deslogar
+  // o aparelho — foi o que derrubou a conexão em 20/08.
+  it('oferece a limpeza mesmo sem conexão registrada', () => {
+    render(<PainelConexao conexoes={[]} />)
+    expect(screen.getByRole('button', { name: /Limpar órfãs/ })).toBeInTheDocument()
+  })
+
+  it('conta quantas foram removidas', async () => {
+    acoes.limpar.mockResolvedValue({ ok: true, removidas: 2 })
+
+    render(<PainelConexao conexoes={[]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Limpar órfãs/ }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '2 instância(s) órfã(s) removida(s)',
+    )
+  })
+
+  it('diz quando não há nenhuma, em vez de ficar mudo', async () => {
+    render(<PainelConexao conexoes={[]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Limpar órfãs/ }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Nenhuma instância órfã',
+    )
+  })
+
+  it('remoção que deixou órfã avisa em vez de fingir sucesso', async () => {
+    acoes.remover.mockResolvedValue({
+      ok: true,
+      erro: 'A conexão saiu daqui, mas a Evolution não respondeu',
+    })
+
+    render(
+      <PainelConexao
+        conexoes={[
+          {
+            id: 'c1',
+            nome: 'Comercial',
+            nomeEvolution: 'inst_abcd1234',
+            numero: null,
+            status: 'conectada' as const,
+            atualizadoEm: '2026-08-20T10:00:00.000Z',
+          },
+        ]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Remover Comercial' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'a Evolution não respondeu',
+    )
   })
 })

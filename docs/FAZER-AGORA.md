@@ -166,6 +166,25 @@ Contatos leem tabelas próprias, e o status de conexão é uma chamada ao vivo.
 **Só depois do passo 3, com o serviço já reiniciado** — senão ela volta a
 encher enquanto você limpa.
 
+Confira primeiro **o que o cascade levaria junto** — ele esvazia também toda
+tabela que aponte para essas:
+
+```sql
+select
+  tc.table_name  as tabela_que_seria_esvaziada,
+  ccu.table_name as por_apontar_para
+from information_schema.table_constraints tc
+join information_schema.constraint_column_usage ccu
+  on ccu.constraint_name = tc.constraint_name
+where tc.constraint_type = 'FOREIGN KEY'
+  and ccu.table_name in ('Message', 'Chat', 'Contact', 'Label')
+  and tc.table_schema = 'public';
+```
+
+Aparecendo só `MessageUpdate`, está tudo bem. Aparecendo `Session` ou
+`Instance`, **pare** e me avise — nesse caso o cascade derrubaria a sessão do
+WhatsApp.
+
 ```sql
 truncate table public."Message" restart identity cascade;
 truncate table public."MessageUpdate" restart identity cascade;
@@ -235,6 +254,23 @@ sozinho, crie um job no cron-job.org, a cada 1 minuto:
 ```
 https://SUA-URL.vercel.app/api/disparos/processar?chave=SEU_WEBHOOK_SECRET
 ```
+
+---
+
+## Se o WhatsApp desconectar (erro 401)
+
+Acontece quando o WhatsApp desloga o aparelho — por remoção em Aparelhos
+Conectados no celular, ou por sessões duplicadas no mesmo número. A `Session`
+fica vazia e todas as instâncias aparecem como `close`.
+
+Para voltar:
+
+1. Na tela **Conexão**, clique em **Limpar órfãs**. Isso apaga da Evolution as
+   instâncias que ficaram sem registro no app — cada uma continua tentando
+   reconectar com o seu número, e é justamente o que faz o WhatsApp deslogar
+   tudo de novo.
+2. Remova a conexão antiga pelo botão **Remover** do cartão.
+3. Crie uma nova e leia o QR.
 
 ---
 

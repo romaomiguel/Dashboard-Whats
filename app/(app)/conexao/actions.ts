@@ -250,9 +250,18 @@ export async function removerConexao(id: string): Promise<EstadoConexaoUi> {
   const conexao = await conexaoDoUsuario(supabase, id, user.id)
   if (!conexao) return { ok: true }
 
-  // Se a Evolution estiver fora do ar, a linha some do mesmo jeito: manter um
-  // registro que o usuário não consegue remover é pior que a instância órfã.
-  await removerInstancia(String(conexao.evolution_name)).catch(() => {})
+  // Timeout longo: com a Evolution hibernando, o curto falhava, o catch
+  // engolia o erro e a instância ficava órfã lá — continuando a tentar
+  // reconectar com o mesmo número, o que faz o WhatsApp deslogar todas.
+  let sobrouOrfa = false
+  try {
+    await removerInstancia(String(conexao.evolution_name), {
+      timeoutMs: TIMEOUT_ACORDAR_MS,
+    })
+  } catch (erro) {
+    sobrouOrfa = true
+    console.error('[conexao] instância órfã na Evolution:', erro)
+  }
 
   const { error } = await supabase
     .from('instances')
@@ -263,5 +272,66 @@ export async function removerConexao(id: string): Promise<EstadoConexaoUi> {
   if (error) return { erro: 'Não foi possível remover a conexão.' }
 
   revalidatePath('/conexao')
+
+  // A linha sai de qualquer jeito — deixar um registro que o usuário não
+  // consegue apagar seria pior —, mas ele precisa saber que sobrou lixo.
+  if (sobrouOrfa) {
+    return {
+      ok: true,
+      erro: 'A conexão saiu daqui, mas a Evolution não respondeu e a instância ficou lá. Use "Limpar órfãs".',
+    }
+  }
+
   return { ok: true }
+}
+
+/**
+ * Remove da Evolution as instâncias que não têm registro no app.
+ *
+ * Elas surgem quando a remoção falha pela metade. Cada uma continua tentando
+ * reconectar com o mesmo número, e sessões duplicadas fazem o WhatsApp
+ * deslogar o aparelho — foi o que derrubou a conexão em 20/08.
+ */
+export async function limparOrfas(): Promise<EstadoConexaoUi & { removidas?: number }> {
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  let instancias: unknown
+  try {
+    instancias = await chamar<unknown>(endpoints.instancia.listar(), {
+      timeoutMs: TIMEOUT_ACORDAR_MS,
+    })
+  } catch (erro) {
+    return { erro: mensagemEvolution(erro) }
+  }
+
+  if (!Array.isArray(instancias)) return { erro: 'Resposta inesperada da Evolution.' }
+
+  // Compara com a tabela inteira, não só com as deste usuário: apagar a
+  // instância de outra conta seria bem pior que deixar uma órfã.
+  const { data: registradas } = await supabase
+    .from('instances')
+    .select('evolution_name')
+
+  const conhecidas = new Set(
+    (registradas ?? []).map((r) => String(r.evolution_name)),
+  )
+
+  const orfas = instancias
+    .map((i) => (i as { name?: string })?.name)
+    .filter((nome): nome is string => typeof nome === 'string' && nome.length > 0)
+    .filter((nome) => !conhecidas.has(nome))
+
+  let removidas = 0
+  for (const nome of orfas) {
+    try {
+      await removerInstancia(nome)
+      removidas += 1
+    } catch (erro) {
+      console.error('[conexao] falha ao remover órfã', nome, erro)
+    }
+  }
+
+  revalidatePath('/conexao')
+  return { ok: true, removidas }
 }
