@@ -18,7 +18,14 @@ async function usuarioAtual() {
 /** Erro de banco traduzido para algo que o usuário consiga agir. */
 function mensagemDeErro(codigo: string | undefined, padrao: string) {
   if (codigo === '23505') return 'Já existe um contato com esse número.'
-  if (codigo === '42P01') return 'Rode a migration 0003 no Supabase antes de cadastrar.'
+  // PGRST205 é o "tabela fora do schema cache" do PostgREST. O 42P01 do
+  // Postgres nunca chega até aqui: quem responde é a API REST, não o banco.
+  if (codigo === 'PGRST205' || codigo === '42P01') {
+    return 'A tabela de contatos ainda não existe. Rode a migration 0003 no Supabase.'
+  }
+  if (codigo === '23503') {
+    return 'Etiqueta não encontrada. Recarregue a página e tente de novo.'
+  }
   return padrao
 }
 

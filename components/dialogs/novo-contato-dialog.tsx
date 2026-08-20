@@ -44,6 +44,9 @@ export function NovoContatoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
   const [etiquetaId, setEtiquetaId] = useState('')
   const [estado, enviar] = useActionState<EstadoContato, FormData>(criarContato, {})
 
+  // Sem items, o gatilho mostraria o uuid da etiqueta em vez do nome.
+  const itensEtiqueta = Object.fromEntries(etiquetas.map((e) => [e.id, e.nome]))
+
   // Fecha só depois que a ação confirmou a gravação: fechar no clique
   // esconderia o erro de um contato que não entrou.
   useEffect(() => {
@@ -97,6 +100,7 @@ export function NovoContatoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
               </p>
             ) : (
               <Select
+                items={itensEtiqueta}
                 value={etiquetaId}
                 onValueChange={(valor) => setEtiquetaId(String(valor ?? ''))}
               >

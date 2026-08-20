@@ -127,7 +127,8 @@ export function EtiquetasCard({ etiquetas }: { etiquetas: Etiqueta[] }) {
             <div className="flex flex-col gap-2">
               <Label htmlFor="etiqueta-cor">Cor</Label>
               <input type="hidden" name="cor" value={cor} />
-              <Select value={cor} onValueChange={(v) => setCor(String(v))}>
+              {/* items: sem ele o gatilho mostraria 'ambar' em vez de 'Âmbar'. */}
+              <Select items={ROTULO_COR} value={cor} onValueChange={(v) => setCor(String(v))}>
                 <SelectTrigger id="etiqueta-cor" className="w-full sm:w-36">
                   <SelectValue />
                 </SelectTrigger>

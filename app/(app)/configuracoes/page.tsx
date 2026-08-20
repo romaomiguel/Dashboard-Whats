@@ -7,23 +7,21 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { listarEtiquetas } from '@/lib/consultas/etiquetas'
-import { criarClienteServidor } from '@/lib/supabase/server'
+import { nomeDoPerfil, usuarioLogado } from '@/lib/consultas/sessao'
 import { EtiquetasCard } from './etiquetas-card'
 import { FormularioPerfil } from './formulario-perfil'
 import { Preferencias } from './preferencias'
 
 export default async function Page() {
-  const supabase = await criarClienteServidor()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const [{ data: perfil }, etiquetas] = await Promise.all([
-    supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle(),
+  // usuarioLogado e nomeDoPerfil já foram resolvidos pelo layout nesta mesma
+  // requisição; aqui saem do cache, sem nova ida ao Supabase.
+  const [usuario, nome, etiquetas] = await Promise.all([
+    usuarioLogado(),
+    nomeDoPerfil(),
     listarEtiquetas(),
   ])
+
+  if (!usuario) redirect('/login')
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -34,7 +32,7 @@ export default async function Page() {
             <CardDescription>Informações da sua conta</CardDescription>
           </CardHeader>
           <CardContent>
-            <FormularioPerfil nome={perfil?.nome ?? ''} email={user.email ?? ''} />
+            <FormularioPerfil nome={nome} email={usuario.email ?? ''} />
           </CardContent>
         </Card>
 

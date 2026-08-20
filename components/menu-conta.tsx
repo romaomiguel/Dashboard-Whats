@@ -53,8 +53,12 @@ export function MenuConta({ nome, email }: { nome: string; email: string }) {
         {/* O logout continua sendo server action: limpa o cookie de sessão
             no servidor, coisa que um handler de clique não faria. */}
         <form action={sair}>
+          {/* nativeButton: o Item do Base UI assume que o render NÃO é um
+              <button>. Aqui é, porque quem dispara a server action é o submit
+              do formulário. */}
           <DropdownMenuItem
             variant="destructive"
+            nativeButton
             render={<button type="submit" className="w-full" />}
           >
             <LogOut className="size-4" />

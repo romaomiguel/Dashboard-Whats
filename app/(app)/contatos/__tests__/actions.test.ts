@@ -108,10 +108,25 @@ describe('criarContato', () => {
     expect(estado.erro).toBe('Já existe um contato com esse número.')
   })
 
-  it('avisa quando a migration ainda não rodou', async () => {
+  // O PostgREST responde PGRST205 quando a tabela não está no schema cache;
+  // o 42P01 do Postgres não chega até aqui. Antes só o 42P01 era tratado, e a
+  // tela dizia um genérico "não foi possível salvar" sem explicar nada.
+  it('avisa quando a migration ainda não rodou (PGRST205 do PostgREST)', async () => {
+    banco.erro = { message: 'Could not find the table', code: 'PGRST205' }
+    const estado = await criarContato({}, form({ nome: 'Joana', numero: '123' }))
+    expect(estado.erro).toMatch(/migration 0003/)
+  })
+
+  it('trata também o 42P01, caso o erro venha direto do Postgres', async () => {
     banco.erro = { message: 'relation does not exist', code: '42P01' }
     const estado = await criarContato({}, form({ nome: 'Joana', numero: '123' }))
     expect(estado.erro).toMatch(/migration 0003/)
+  })
+
+  it('explica etiqueta inexistente em vez do erro de chave estrangeira', async () => {
+    banco.erro = { message: 'violates foreign key', code: '23503' }
+    const estado = await criarContato({}, form({ nome: 'Joana', numero: '123' }))
+    expect(estado.erro).toMatch(/Etiqueta não encontrada/)
   })
 
   it('recusa quando não há sessão', async () => {

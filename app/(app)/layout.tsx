@@ -2,27 +2,20 @@ import { redirect } from 'next/navigation'
 import { DadosExemploProvider } from '@/components/dados-exemplo-provider'
 import { Sidebar } from '@/components/sidebar'
 import { Topbar } from '@/components/topbar'
-import { criarClienteServidor } from '@/lib/supabase/server'
+import { nomeDoPerfil, usuarioLogado } from '@/lib/consultas/sessao'
 
 export default async function LayoutApp({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await criarClienteServidor()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const usuario = await usuarioLogado()
 
   // O middleware já barra anônimos; esta checagem é a segunda tranca,
   // caso o matcher do middleware mude.
-  if (!user) redirect('/login')
+  if (!usuario) redirect('/login')
 
-  const { data: perfil } = await supabase
-    .from('profiles')
-    .select('nome')
-    .eq('id', user.id)
-    .maybeSingle()
+  const nome = await nomeDoPerfil()
 
   return (
     <DadosExemploProvider>
@@ -32,7 +25,7 @@ export default async function LayoutApp({
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar nome={perfil?.nome ?? ''} email={user.email ?? ''} />
+          <Topbar nome={nome} email={usuario.email ?? ''} />
           <main className="flex-1 overflow-y-auto p-6">
             <div className="mx-auto flex max-w-7xl flex-col gap-6">{children}</div>
           </main>

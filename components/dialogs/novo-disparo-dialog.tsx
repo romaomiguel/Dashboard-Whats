@@ -26,6 +26,14 @@ import { conexoes } from '@/lib/data'
 import type { Etiqueta } from '@/lib/etiquetas'
 
 export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
+  // items mapeia valor -> rótulo. Sem ele o Base UI mostra no gatilho o valor
+  // cru: 'todos' em minúsculo e o uuid da etiqueta em vez do nome.
+  const itensConexao = Object.fromEntries(conexoes.map((c) => [c.numero, c.nome]))
+  const itensPublico = {
+    todos: 'Todos os contatos',
+    ...Object.fromEntries(etiquetas.map((e) => [e.id, e.nome])),
+  }
+
   return (
     <Dialog>
       <DialogTrigger render={<Button className="gap-2" />}>
@@ -47,7 +55,7 @@ export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="disparo-conexao">Conexão</Label>
-              <Select>
+              <Select items={itensConexao}>
                 <SelectTrigger id="disparo-conexao">
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>
@@ -62,7 +70,7 @@ export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="disparo-publico">Público</Label>
-              <Select>
+              <Select items={itensPublico}>
                 <SelectTrigger id="disparo-publico">
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>

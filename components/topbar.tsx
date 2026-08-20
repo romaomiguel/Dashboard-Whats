@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { Bell, Send } from 'lucide-react'
-import { BuscaGlobal } from '@/components/busca-global'
 import { MenuConta } from '@/components/menu-conta'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TituloPagina } from '@/components/titulo-pagina'
@@ -12,8 +11,6 @@ export function Topbar({ nome, email }: { nome: string; email: string }) {
       <TituloPagina />
 
       <div className="flex items-center gap-2">
-        <BuscaGlobal />
-
         {/* nativeButton={false}: o Base UI só dispensa o <button> nativo
             quando avisado, e aqui o render é um <a> do Next. */}
         <Button
