@@ -56,12 +56,12 @@ describe('Conexão — cartões de amostra', () => {
 
 describe('Mensagens', () => {
   it('lista as conversas de exemplo', async () => {
-    montar(<ListaConversas />)
+    montar(<ListaConversas conversas={[]} />)
     expect(await screen.findByText('Lívia Torri')).toBeInTheDocument()
   })
 
   it('filtra pela busca', async () => {
-    montar(<ListaConversas />)
+    montar(<ListaConversas conversas={[]} />)
     await screen.findByText('Lívia Torri')
 
     await userEvent.type(
@@ -74,7 +74,7 @@ describe('Mensagens', () => {
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<ListaConversas />)
+    await comExemploDesligado(<ListaConversas conversas={[]} />)
     expect(screen.getByText('Nenhuma conversa')).toBeInTheDocument()
   })
 })
@@ -157,7 +157,7 @@ describe('busca vinda da topbar', () => {
   })
 
   it('Mensagens já abre filtrada pelo termo da URL', async () => {
-    montar(<ListaConversas buscaInicial="Helena" />)
+    montar(<ListaConversas conversas={[]} buscaInicial="Helena" />)
     expect(await screen.findByText('Helena Duarte')).toBeInTheDocument()
     expect(screen.queryByText('Rafael Nunes')).not.toBeInTheDocument()
   })
@@ -240,5 +240,58 @@ describe('mídias salvas', () => {
     expect(
       await screen.findByRole('button', { name: 'Excluir contrato.pdf' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('conversas reais', () => {
+  const conversas = [
+    {
+      numero: '5565984038479',
+      nome: 'Joana Prado',
+      previa: 'Promoção de agosto!',
+      quando: '2026-08-20T05:01:53.000Z',
+      direcao: 'saida' as const,
+      status: 'enviada' as const,
+      naoLidas: 0,
+    },
+  ]
+
+  it('o disparo enviado aparece como conversa', async () => {
+    montar(<ListaConversas conversas={conversas} />)
+    expect(await screen.findByText('Joana Prado')).toBeInTheDocument()
+    expect(screen.getByText('Promoção de agosto!')).toBeInTheDocument()
+    expect(screen.getByText('enviada')).toBeInTheDocument()
+  })
+
+  it('envio que falhou se identifica como falha', async () => {
+    montar(
+      <ListaConversas
+        conversas={[{ ...conversas[0], status: 'falhou' as const }]}
+      />,
+    )
+    expect(await screen.findByText('falhou')).toBeInTheDocument()
+  })
+
+  it('resposta recebida conta como não lida', async () => {
+    montar(
+      <ListaConversas
+        conversas={[
+          {
+            ...conversas[0],
+            direcao: 'entrada' as const,
+            status: 'recebida' as const,
+            naoLidas: 2,
+          },
+        ]}
+      />,
+    )
+    expect(await screen.findByText('respondeu')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('havendo conversa real, o exemplo some', async () => {
+    montar(<ListaConversas conversas={conversas} />)
+    await screen.findByText('Joana Prado')
+    expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
   })
 })

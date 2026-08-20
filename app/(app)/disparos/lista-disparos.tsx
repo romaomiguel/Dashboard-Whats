@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Ban, Send, Users } from 'lucide-react'
+import { Ban, Loader2, Send, Users, Zap } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { NovoDisparoDialog } from '@/components/dialogs/novo-disparo-dialog'
 import { EstadoVazio } from '@/components/estado-vazio'
@@ -19,8 +19,9 @@ import {
   type Disparo,
   type StatusDisparo,
 } from '@/lib/disparos'
+import { formatarDataHora } from '@/lib/datas'
 import type { Etiqueta } from '@/lib/etiquetas'
-import { cancelarDisparo } from './actions'
+import { cancelarDisparo, enviarAgora } from './actions'
 
 /** Cartão da lista, venha ele do banco ou dos dados de exemplo. */
 type Cartao = {
@@ -42,17 +43,6 @@ const STATUS_EXEMPLO: Record<string, StatusDisparo> = {
   rascunho: 'cancelado',
 }
 
-function formatarQuando(iso: string) {
-  const data = new Date(iso)
-  if (Number.isNaN(data.getTime())) return iso
-  return data.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 export function ListaDisparos({
   etiquetas,
   conexoes,
@@ -65,6 +55,7 @@ export function ListaDisparos({
   const router = useRouter()
   const { mostrarExemplo } = useDadosExemplo()
   const [cancelando, iniciarCancelamento] = useTransition()
+  const [enviando, iniciarEnvio] = useTransition()
   const [erro, setErro] = useState('')
 
   // Só cai no exemplo quem ainda não criou campanha nenhuma.
@@ -89,10 +80,19 @@ export function ListaDisparos({
         total: d.total,
         enviados: d.enviados,
         falhas: d.falhas,
-        quando: formatarQuando(d.agendadoPara),
+        quando: formatarDataHora(d.agendadoPara),
         detalhe: [d.conexao, d.publico].filter(Boolean).join(' · '),
         ehExemplo: false,
       }))
+
+  function enviar(id: string) {
+    setErro('')
+    iniciarEnvio(async () => {
+      const resultado = await enviarAgora(id)
+      if (resultado.erro) setErro(resultado.erro)
+      else router.refresh()
+    })
+  }
 
   function cancelar(id: string) {
     setErro('')
@@ -157,6 +157,23 @@ export function ListaDisparos({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
+                    {podeCancelar && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={enviando}
+                        onClick={() => enviar(d.id)}
+                        aria-label={`Enviar ${d.nome} agora`}
+                      >
+                        {enviando ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Zap className="size-4" />
+                        )}
+                        Enviar agora
+                      </Button>
+                    )}
                     {podeCancelar && (
                       <Button
                         variant="ghost"

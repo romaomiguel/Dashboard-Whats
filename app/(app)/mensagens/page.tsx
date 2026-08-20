@@ -1,3 +1,4 @@
+import { listarConversas } from '@/lib/consultas/mensagens'
 import { ListaConversas } from './lista-conversas'
 
 export default async function Page({
@@ -5,6 +6,10 @@ export default async function Page({
 }: {
   searchParams: Promise<{ busca?: string }>
 }) {
-  const { busca } = await searchParams
-  return <ListaConversas buscaInicial={busca ?? ''} />
+  const [{ busca }, conversas] = await Promise.all([
+    searchParams,
+    listarConversas(),
+  ])
+
+  return <ListaConversas conversas={conversas} buscaInicial={busca ?? ''} />
 }

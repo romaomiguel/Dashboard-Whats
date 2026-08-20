@@ -1,8 +1,22 @@
 'use client'
 
-import { useActionState, useEffect, useState, useTransition } from 'react'
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useState,
+  useTransition,
+} from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Plus, QrCode, Signal, Smartphone, Trash2 } from 'lucide-react'
+import {
+  Loader2,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Signal,
+  Smartphone,
+  Trash2,
+} from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { EstadoVazio } from '@/components/estado-vazio'
 import { Badge } from '@/components/ui/badge'
@@ -26,7 +40,12 @@ import {
   ROTULO_STATUS,
   type Conexao,
 } from '@/lib/conexoes'
-import { criarConexao, removerConexao, type EstadoConexaoUi } from './actions'
+import {
+  criarConexao,
+  removerConexao,
+  verificarConexao,
+  type EstadoConexaoUi,
+} from './actions'
 import { DialogoQr } from './dialogo-qr'
 
 function BotaoCriar() {
@@ -116,10 +135,14 @@ function NovaConexaoDialog({
   )
 }
 
+/** De quanto em quanto tempo a tela reconfere o estado dos aparelhos. */
+const INTERVALO_ESTADO_MS = 30_000
+
 export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
   const router = useRouter()
   const [erro, setErro] = useState('')
   const [removendo, iniciarRemocao] = useTransition()
+  const [conferindo, setConferindo] = useState(false)
   const [qrAberto, setQrAberto] = useState<{
     id: string
     nome: string
@@ -127,6 +150,31 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
   } | null>(null)
 
   const conectadas = conexoes.filter((c) => c.status === 'conectada').length
+
+  // Desconectar o celular não avisa ninguém: sem reconferir, o cartão ficaria
+  // "Conectado" para sempre. O webhook cobre isso em produção, mas só quando a
+  // Evolution alcança o app — em desenvolvimento, nunca.
+  const conferirEstados = useCallback(
+    async (mostrarGiro = false) => {
+      if (conexoes.length === 0) return
+      if (mostrarGiro) setConferindo(true)
+
+      const antes = conexoes.map((c) => c.status).join()
+      const depois = await Promise.all(
+        conexoes.map((c) => verificarConexao(c.id)),
+      )
+
+      if (mostrarGiro) setConferindo(false)
+      if (depois.map((r) => r.status ?? '').join() !== antes) router.refresh()
+    },
+    [conexoes, router],
+  )
+
+  useEffect(() => {
+    if (conexoes.length === 0) return
+    const relogio = setInterval(() => void conferirEstados(), INTERVALO_ESTADO_MS)
+    return () => clearInterval(relogio)
+  }, [conexoes.length, conferirEstados])
 
   function remover(id: string) {
     setErro('')
@@ -146,9 +194,27 @@ export function PainelConexao({ conexoes }: { conexoes: Conexao[] }) {
           {conexoes.length === 1 ? 'conexão conectada' : 'conexões conectadas'}
         </div>
 
-        <NovaConexaoDialog
-          aoCriar={(id, nome, qr) => setQrAberto({ id, nome, qr })}
-        />
+        <div className="flex gap-2">
+          {conexoes.length > 0 && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={conferindo}
+              onClick={() => void conferirEstados(true)}
+            >
+              {conferindo ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Atualizar
+            </Button>
+          )}
+
+          <NovaConexaoDialog
+            aoCriar={(id, nome, qr) => setQrAberto({ id, nome, qr })}
+          />
+        </div>
       </div>
 
       {erro && (

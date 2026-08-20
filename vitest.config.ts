@@ -14,6 +14,10 @@ export default defineConfig(({ mode }) => ({
     env: loadEnv(mode, process.cwd(), ''),
   },
   resolve: {
-    alias: { '@': path.resolve(__dirname, '.') },
+    alias: {
+      '@': path.resolve(__dirname, '.'),
+      // Ver o comentário em vitest.server-only.ts.
+      'server-only': path.resolve(__dirname, 'vitest.server-only.ts'),
+    },
   },
 }))

@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import type { ContatoSalvo } from '@/lib/consultas/contatos'
 import { contatos as contatosExemplo } from '@/lib/data'
 import { COR_EXEMPLO, ESTILO_ETIQUETA, type Etiqueta } from '@/lib/etiquetas'
+import { formatarData } from '@/lib/datas'
 import { iniciais } from '@/lib/iniciais'
 import { excluirContatos } from './actions'
 
@@ -46,7 +47,7 @@ function doBanco(salvos: ContatoSalvo[]): Linha[] {
     nome: c.nome,
     numero: c.numero,
     etiqueta: c.etiqueta,
-    detalhe: new Date(c.criadoEm).toLocaleDateString('pt-BR'),
+    detalhe: formatarData(c.criadoEm),
     ehExemplo: false,
   }))
 }

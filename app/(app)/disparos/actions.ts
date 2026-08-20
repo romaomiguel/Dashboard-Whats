@@ -7,6 +7,7 @@ import {
   MINUTOS_AGORA,
   numeroParaWhatsApp,
 } from '@/lib/disparos'
+import { processarLote } from '@/lib/disparos/processador'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
 export type EstadoDisparo = { erro?: string; ok?: boolean; total?: number }
@@ -171,4 +172,34 @@ export async function cancelarDisparo(id: string): Promise<EstadoDisparo> {
 
   revalidatePath('/disparos')
   return { ok: true }
+}
+
+/**
+ * Envia um lote agora, a pedido do usuário.
+ *
+ * Existe porque o agendamento depende de um cron externo — a Vercel no plano
+ * free só roda cron uma vez por dia. Sem isto, quem não configurou o
+ * agendador veria a campanha parada em "agendado" para sempre.
+ */
+export async function enviarAgora(id: string): Promise<EstadoDisparo> {
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  const { data: disparo } = await supabase
+    .from('disparos')
+    .select('id, mensagem, instance_id, status')
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .maybeSingle()
+
+  if (!disparo) return { erro: 'Disparo não encontrado.' }
+  if (disparo.status === 'cancelado') return { erro: 'Este disparo foi cancelado.' }
+  if (disparo.status === 'concluido') return { erro: 'Este disparo já terminou.' }
+
+  const resultado = await processarLote(supabase, disparo)
+  if (!resultado) return { erro: 'A conexão desse disparo não existe mais.' }
+
+  revalidatePath('/disparos')
+  revalidatePath('/mensagens')
+  return { ok: true, total: resultado.enviados }
 }

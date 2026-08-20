@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { MidiaSalva } from '@/lib/consultas/midias'
 import { midias as midiasExemplo } from '@/lib/data'
+import { formatarData } from '@/lib/datas'
 import { formatarTamanho, ROTULO_TIPO, type TipoMidia } from '@/lib/midias'
 import { excluirMidia } from './actions'
 
@@ -53,7 +54,7 @@ export function ListaMidias({ midias }: { midias: MidiaSalva[] }) {
         nome: m.nome,
         tipo: m.tipo,
         tamanho: formatarTamanho(m.tamanho),
-        data: new Date(m.criadoEm).toLocaleDateString('pt-BR'),
+        data: formatarData(m.criadoEm),
         ehExemplo: false,
       }))
 

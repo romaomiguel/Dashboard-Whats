@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { MessageCircle, Search } from 'lucide-react'
+import { AlertCircle, Check, MessageCircle, Search } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { EstadoVazio } from '@/components/estado-vazio'
 import { SeloDadosExemplo } from '@/components/selo-dados-exemplo'
@@ -9,21 +9,77 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { mensagensRecentes, summary, type Mensagem } from '@/lib/data'
+import type { Conversa } from '@/lib/consultas/mensagens'
+import { mensagensRecentes, summary } from '@/lib/data'
+import { formatarHora } from '@/lib/datas'
 import { iniciais } from '@/lib/iniciais'
 
-const estiloStatus: Record<Mensagem['status'], string> = {
-  respondida: 'bg-primary/15 text-primary',
-  lida: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
-  entregue: 'bg-muted text-muted-foreground',
+/** Linha da lista, venha ela do banco ou dos dados de exemplo. */
+type Linha = {
+  chave: string
+  contato: string
+  previa: string
+  hora: string
+  naoLidas: number
+  rotulo: string
+  estilo: string
+  erro: boolean
 }
 
-export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string }) {
+const ESTILO = {
+  recebida: 'bg-primary/15 text-primary',
+  enviada: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  falhou: 'bg-destructive/15 text-destructive',
+  entregue: 'bg-muted text-muted-foreground',
+  lida: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  respondida: 'bg-primary/15 text-primary',
+} as const
+
+function doBanco(conversas: Conversa[]): Linha[] {
+  return conversas.map((c) => ({
+    chave: c.numero,
+    contato: c.nome,
+    previa: c.previa,
+    hora: formatarHora(c.quando),
+    naoLidas: c.naoLidas,
+    rotulo:
+      c.status === 'falhou'
+        ? 'falhou'
+        : c.direcao === 'entrada'
+          ? 'respondeu'
+          : 'enviada',
+    estilo: ESTILO[c.status],
+    erro: c.status === 'falhou',
+  }))
+}
+
+export function ListaConversas({
+  conversas,
+  buscaInicial = '',
+}: {
+  conversas: Conversa[]
+  buscaInicial?: string
+}) {
   const { mostrarExemplo } = useDadosExemplo()
   const [busca, setBusca] = useState(buscaInicial)
 
-  const lista = mostrarExemplo ? mensagensRecentes : []
-  const ativas = mostrarExemplo ? summary.mensagens : 0
+  // Só cai no exemplo quem ainda não trocou mensagem nenhuma.
+  const usandoExemplo = conversas.length === 0 && mostrarExemplo
+
+  const lista: Linha[] = usandoExemplo
+    ? mensagensRecentes.map((m) => ({
+        chave: m.numero,
+        contato: m.contato,
+        previa: m.previa,
+        hora: m.hora,
+        naoLidas: m.naoLidas,
+        rotulo: m.status,
+        estilo: ESTILO[m.status],
+        erro: false,
+      }))
+    : doBanco(conversas)
+
+  const ativas = usandoExemplo ? summary.mensagens : lista.length
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -31,7 +87,7 @@ export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string })
     return lista.filter(
       (m) =>
         m.contato.toLowerCase().includes(termo) ||
-        m.numero.includes(termo) ||
+        m.chave.includes(termo) ||
         m.previa.toLowerCase().includes(termo),
     )
   }, [lista, busca])
@@ -43,7 +99,9 @@ export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string })
       <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm">
         <MessageCircle className="size-4 text-primary" />
         <span className="font-medium text-foreground">{ativas}</span>
-        <span className="text-muted-foreground">conversas ativas</span>
+        <span className="text-muted-foreground">
+          {usandoExemplo ? 'conversas de exemplo' : 'conversas'}
+        </span>
       </div>
 
       <Card>
@@ -60,6 +118,7 @@ export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string })
             />
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
           {filtradas.length === 0 ? (
             <EstadoVazio
@@ -68,14 +127,14 @@ export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string })
               descricao={
                 busca
                   ? 'Nenhuma conversa corresponde à sua busca.'
-                  : 'Conecte seu WhatsApp em Conexão para começar a receber mensagens.'
+                  : 'Conecte seu WhatsApp e faça um disparo — o que sair e o que chegar aparece aqui.'
               }
             />
           ) : (
             <div className="divide-y divide-border">
               {filtradas.map((m) => (
                 <div
-                  key={m.numero}
+                  key={m.chave}
                   className="flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-muted/50"
                 >
                   <div className="relative">
@@ -90,6 +149,7 @@ export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string })
                       </span>
                     )}
                   </div>
+
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -99,9 +159,19 @@ export function ListaConversas({ buscaInicial = '' }: { buscaInicial?: string })
                         {m.hora}
                       </span>
                     </div>
-                    <p className="truncate text-sm text-muted-foreground">{m.previa}</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {m.previa}
+                    </p>
                   </div>
-                  <Badge className={estiloStatus[m.status]}>{m.status}</Badge>
+
+                  <Badge className={`${m.estilo} gap-1`}>
+                    {m.erro ? (
+                      <AlertCircle className="size-3" />
+                    ) : (
+                      <Check className="size-3" />
+                    )}
+                    {m.rotulo}
+                  </Badge>
                 </div>
               ))}
             </div>
