@@ -19,16 +19,34 @@ services:
         sync: false
       - key: DATABASE_CONNECTION_CLIENT_NAME
         value: evolution
+      # A sessão precisa sobreviver a reinício, senão o QR teria de ser lido
+      # de novo a cada deploy. Esta fica ligada.
       - key: DATABASE_SAVE_DATA_INSTANCE
         value: "true"
+      # As demais ficam desligadas de propósito. Ligadas, a Evolution despeja
+      # o histórico inteiro do WhatsApp — mensagens, cada atualização de
+      # status, a agenda toda e todas as conversas — no mesmo Postgres do
+      # Supabase, e no plano free isso é o que consome a memória.
+      #
+      # O ZapCRM não lê nada disso: ele guarda a própria cópia do que envia e
+      # do que recebe em public.mensagens, alimentada pelo webhook. Os
+      # endpoints findContacts, findChats e findMessages não são usados.
+      #
+      # Desligar aqui não afeta o webhook: ele continua entregando os eventos,
+      # inclusive os recibos de entrega e leitura. O que muda é só a Evolution
+      # parar de arquivar o que ninguém consulta.
       - key: DATABASE_SAVE_DATA_NEW_MESSAGE
-        value: "true"
+        value: "false"
       - key: DATABASE_SAVE_MESSAGE_UPDATE
-        value: "true"
+        value: "false"
       - key: DATABASE_SAVE_DATA_CONTACTS
-        value: "true"
+        value: "false"
       - key: DATABASE_SAVE_DATA_CHATS
-        value: "true"
+        value: "false"
+      - key: DATABASE_SAVE_DATA_LABELS
+        value: "false"
+      - key: DATABASE_SAVE_DATA_HISTORIC
+        value: "false"
       - key: CACHE_REDIS_ENABLED
         value: "false"
       - key: CACHE_LOCAL_ENABLED
