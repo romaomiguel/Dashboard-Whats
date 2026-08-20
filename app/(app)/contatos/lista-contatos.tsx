@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { Contact, Search, Trash2 } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { ImportarContatosDialog } from '@/components/dialogs/importar-contatos-dialog'
@@ -13,40 +13,70 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { contatos as contatosExemplo, type Contato } from '@/lib/data'
-import {
-  COR_EXEMPLO,
-  ESTILO_ETIQUETA,
-  type Etiqueta,
-} from '@/lib/etiquetas'
+import type { ContatoSalvo } from '@/lib/consultas/contatos'
+import { contatos as contatosExemplo } from '@/lib/data'
+import { COR_EXEMPLO, ESTILO_ETIQUETA, type Etiqueta } from '@/lib/etiquetas'
 import { iniciais } from '@/lib/iniciais'
+import { excluirContatos } from './actions'
+
+/** Linha da lista, venha ela do banco ou dos dados de exemplo. */
+type Linha = {
+  id: string
+  nome: string
+  numero: string
+  etiqueta: string | null
+  detalhe: string
+  ehExemplo: boolean
+}
+
+function deExemplo(): Linha[] {
+  return contatosExemplo.map((c) => ({
+    id: c.numero,
+    nome: c.nome,
+    numero: c.numero,
+    etiqueta: c.tag,
+    detalhe: c.ultimaInteracao,
+    ehExemplo: true,
+  }))
+}
+
+function doBanco(salvos: ContatoSalvo[]): Linha[] {
+  return salvos.map((c) => ({
+    id: c.id,
+    nome: c.nome,
+    numero: c.numero,
+    etiqueta: c.etiqueta,
+    detalhe: new Date(c.criadoEm).toLocaleDateString('pt-BR'),
+    ehExemplo: false,
+  }))
+}
 
 export function ListaContatos({
+  contatos,
   etiquetas,
   buscaInicial = '',
 }: {
+  contatos: ContatoSalvo[]
   etiquetas: Etiqueta[]
   buscaInicial?: string
 }) {
   const { mostrarExemplo } = useDadosExemplo()
-  const [lista, setLista] = useState<Contato[]>(contatosExemplo)
   const [busca, setBusca] = useState(buscaInicial)
   const [selecionados, setSelecionados] = useState<string[]>([])
+  const [ocultosDoExemplo, setOcultosDoExemplo] = useState<string[]>([])
+  const [excluindo, iniciarExclusao] = useTransition()
+  const [erro, setErro] = useState('')
 
-  // Etiqueta cadastrada pelo usuário manda na cor; as dos dados de exemplo
-  // caem no mapa fixo.
-  const estiloDaTag = (tag: string) => {
-    const cadastrada = etiquetas.find((e) => e.nome === tag)
-    if (cadastrada) return ESTILO_ETIQUETA[cadastrada.cor]
-    return ESTILO_ETIQUETA[COR_EXEMPLO[tag] ?? 'cinza']
-  }
+  // Só cai no exemplo quem ainda não tem contato de verdade: assim que o
+  // primeiro é cadastrado, a tela mostra a base real e nada mais.
+  const usandoExemplo = contatos.length === 0 && mostrarExemplo
 
-  // Alternar o selo de dados de exemplo recarrega a lista: exclusões locais
-  // valem só enquanto o exemplo estiver ligado.
-  useEffect(() => {
-    setLista(mostrarExemplo ? contatosExemplo : [])
-    setSelecionados([])
-  }, [mostrarExemplo])
+  const lista = useMemo(() => {
+    if (usandoExemplo) {
+      return deExemplo().filter((l) => !ocultosDoExemplo.includes(l.id))
+    }
+    return doBanco(contatos)
+  }, [usandoExemplo, contatos, ocultosDoExemplo])
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -56,29 +86,41 @@ export function ListaContatos({
     )
   }, [lista, busca])
 
-  const todosSelecionados =
-    filtrados.length > 0 && filtrados.every((c) => selecionados.includes(c.numero))
-
-  function alternarTodos() {
-    setSelecionados(todosSelecionados ? [] : filtrados.map((c) => c.numero))
+  const estiloDaEtiqueta = (nome: string | null) => {
+    if (!nome) return ESTILO_ETIQUETA.cinza
+    const cadastrada = etiquetas.find((e) => e.nome === nome)
+    if (cadastrada) return ESTILO_ETIQUETA[cadastrada.cor]
+    return ESTILO_ETIQUETA[COR_EXEMPLO[nome] ?? 'cinza']
   }
 
-  function alternarUm(numero: string) {
+  const todosSelecionados =
+    filtrados.length > 0 && filtrados.every((c) => selecionados.includes(c.id))
+
+  function alternarTodos() {
+    setSelecionados(todosSelecionados ? [] : filtrados.map((c) => c.id))
+  }
+
+  function alternarUm(id: string) {
     setSelecionados((atual) =>
-      atual.includes(numero)
-        ? atual.filter((n) => n !== numero)
-        : [...atual, numero],
+      atual.includes(id) ? atual.filter((i) => i !== id) : [...atual, id],
     )
   }
 
-  function excluirUm(numero: string) {
-    setLista((atual) => atual.filter((c) => c.numero !== numero))
-    setSelecionados((atual) => atual.filter((n) => n !== numero))
-  }
+  function excluir(ids: string[]) {
+    setErro('')
 
-  function excluirSelecionados() {
-    setLista((atual) => atual.filter((c) => !selecionados.includes(c.numero)))
-    setSelecionados([])
+    // Exemplo não está no banco: some só da tela.
+    if (usandoExemplo) {
+      setOcultosDoExemplo((atual) => [...atual, ...ids])
+      setSelecionados((atual) => atual.filter((i) => !ids.includes(i)))
+      return
+    }
+
+    iniciarExclusao(async () => {
+      const resultado = await excluirContatos(ids)
+      if (resultado.erro) setErro(resultado.erro)
+      else setSelecionados((atual) => atual.filter((i) => !ids.includes(i)))
+    })
   }
 
   return (
@@ -89,7 +131,9 @@ export function ListaContatos({
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm">
           <Contact className="size-4 text-primary" />
           <span className="font-medium text-foreground">{lista.length}</span>
-          <span className="text-muted-foreground">contatos no total</span>
+          <span className="text-muted-foreground">
+            {usandoExemplo ? 'contatos de exemplo' : 'contatos no total'}
+          </span>
         </div>
         <div className="flex gap-2">
           <ImportarContatosDialog />
@@ -106,7 +150,8 @@ export function ListaContatos({
                 variant="destructive"
                 size="sm"
                 className="gap-2"
-                onClick={excluirSelecionados}
+                disabled={excluindo}
+                onClick={() => excluir(selecionados)}
               >
                 <Trash2 className="size-4" />
                 Excluir ({selecionados.length})
@@ -124,7 +169,14 @@ export function ListaContatos({
             />
           </div>
         </CardHeader>
+
         <CardContent className="p-0">
+          {erro && (
+            <p role="alert" className="px-6 pb-3 text-sm text-destructive">
+              {erro}
+            </p>
+          )}
+
           {lista.length === 0 ? (
             <EstadoVazio
               icone={Contact}
@@ -143,15 +195,16 @@ export function ListaContatos({
                   Selecionar todos
                 </span>
               </div>
+
               <div className="divide-y divide-border">
                 {filtrados.map((c) => (
                   <div
-                    key={c.numero}
+                    key={c.id}
                     className="group flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-muted/50"
                   >
                     <Checkbox
-                      checked={selecionados.includes(c.numero)}
-                      onCheckedChange={() => alternarUm(c.numero)}
+                      checked={selecionados.includes(c.id)}
+                      onCheckedChange={() => alternarUm(c.id)}
                       aria-label={`Selecionar ${c.nome}`}
                     />
                     <Avatar className="size-9">
@@ -167,21 +220,31 @@ export function ListaContatos({
                         {c.numero}
                       </p>
                     </div>
-                    <Badge className={estiloDaTag(c.tag)}>{c.tag}</Badge>
+                    {c.etiqueta ? (
+                      <Badge className={estiloDaEtiqueta(c.etiqueta)}>
+                        {c.etiqueta}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        sem etiqueta
+                      </span>
+                    )}
                     <span className="hidden w-32 text-right text-xs text-muted-foreground sm:block">
-                      {c.ultimaInteracao}
+                      {c.detalhe}
                     </span>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-8 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                      onClick={() => excluirUm(c.numero)}
+                      className="size-8 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                      disabled={excluindo}
+                      onClick={() => excluir([c.id])}
                       aria-label={`Excluir ${c.nome}`}
                     >
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
                 ))}
+
                 {filtrados.length === 0 && (
                   <p className="px-6 py-10 text-center text-sm text-muted-foreground">
                     Nenhum contato encontrado.

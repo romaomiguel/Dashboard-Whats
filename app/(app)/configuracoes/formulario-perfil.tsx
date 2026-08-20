@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,16 +25,31 @@ export function FormularioPerfil({
 }) {
   const [estado, enviar] = useActionState<EstadoPerfil, FormData>(salvarPerfil, {})
 
+  // Controlado de propósito: salvar revalida o layout, o servidor manda o nome
+  // novo por prop e um campo não controlado teria o defaultValue trocado
+  // depois de montado — o Base UI avisa exatamente sobre isso.
+  const [valor, setValor] = useState(nome)
+
+  useEffect(() => {
+    setValor(nome)
+  }, [nome])
+
   return (
     <form action={enviar} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="nome">Nome</Label>
-        <Input id="nome" name="nome" defaultValue={nome} maxLength={80} />
+        <Input
+          id="nome"
+          name="nome"
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          maxLength={80}
+        />
       </div>
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">E-mail</Label>
-        <Input id="email" type="email" defaultValue={email} disabled readOnly />
+        <Input id="email" type="email" value={email} readOnly disabled />
         <p className="text-xs text-muted-foreground">
           O e-mail é o identificador da conta e não pode ser alterado aqui.
         </p>

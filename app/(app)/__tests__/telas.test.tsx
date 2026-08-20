@@ -7,7 +7,7 @@ import {
 } from '@/components/dados-exemplo-provider'
 import ConexaoPage from '@/app/(app)/conexao/page'
 import { ListaContatos } from '@/app/(app)/contatos/lista-contatos'
-import DisparosPage from '@/app/(app)/disparos/page'
+import { ListaDisparos } from '@/app/(app)/disparos/lista-disparos'
 import { ListaConversas } from '@/app/(app)/mensagens/lista-conversas'
 import MidiasPage from '@/app/(app)/midias/page'
 
@@ -80,7 +80,7 @@ describe('Mensagens', () => {
 
 describe('Contatos', () => {
   it('lista e filtra os contatos de exemplo', async () => {
-    montar(<ListaContatos etiquetas={[]} />)
+    montar(<ListaContatos contatos={[]} etiquetas={[]} />)
     expect(await screen.findByText('Sofia Martins')).toBeInTheDocument()
 
     await userEvent.type(
@@ -93,7 +93,7 @@ describe('Contatos', () => {
   })
 
   it('exclui um contato da lista', async () => {
-    montar(<ListaContatos etiquetas={[]} />)
+    montar(<ListaContatos contatos={[]} etiquetas={[]} />)
     await screen.findByText('Bruno Alves')
 
     await userEvent.click(
@@ -104,7 +104,7 @@ describe('Contatos', () => {
   })
 
   it('exclui em lote o que estiver selecionado', async () => {
-    montar(<ListaContatos etiquetas={[]} />)
+    montar(<ListaContatos contatos={[]} etiquetas={[]} />)
     await screen.findByText('Lívia Torri')
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Selecionar todos' }))
@@ -114,21 +114,21 @@ describe('Contatos', () => {
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<ListaContatos etiquetas={[]} />)
+    await comExemploDesligado(<ListaContatos contatos={[]} etiquetas={[]} />)
     expect(screen.getByText('Nenhum contato')).toBeInTheDocument()
   })
 })
 
 describe('Disparos', () => {
   it('mostra o progresso de cada campanha', async () => {
-    montar(<DisparosPage />)
+    montar(<ListaDisparos etiquetas={[]} />)
     expect(await screen.findByText('Promoção Black Friday')).toBeInTheDocument()
     // 1840 de 3200 entregues
     expect(screen.getByText('58%')).toBeInTheDocument()
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<DisparosPage />)
+    await comExemploDesligado(<ListaDisparos etiquetas={[]} />)
     expect(screen.getByText('Nenhuma campanha')).toBeInTheDocument()
   })
 })
@@ -148,7 +148,7 @@ describe('Mídias', () => {
 
 describe('busca vinda da topbar', () => {
   it('Contatos já abre filtrado pelo termo da URL', async () => {
-    montar(<ListaContatos etiquetas={[]} buscaInicial="Sofia" />)
+    montar(<ListaContatos contatos={[]} etiquetas={[]} buscaInicial="Sofia" />)
     expect(await screen.findByText('Sofia Martins')).toBeInTheDocument()
     expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
   })
@@ -164,11 +164,47 @@ describe('etiquetas do usuário', () => {
   it('a etiqueta cadastrada manda na cor do selo', async () => {
     montar(
       <ListaContatos
+        contatos={[]}
         etiquetas={[{ id: '1', nome: 'VIP', cor: 'roxo' }]}
         buscaInicial="Lívia"
       />,
     )
     const selo = await screen.findByText('VIP')
     expect(selo.className).toContain('violet')
+  })
+})
+
+describe('contatos salvos', () => {
+  const salvos = [
+    {
+      id: 'c1',
+      nome: 'Joana Prado',
+      numero: '+55 11 90000-0000',
+      etiqueta: 'VIP',
+      criadoEm: '2026-08-19T12:00:00.000Z',
+    },
+  ]
+
+  it('assim que existe contato real, o exemplo some da lista', async () => {
+    montar(<ListaContatos contatos={salvos} etiquetas={[]} />)
+    expect(await screen.findByText('Joana Prado')).toBeInTheDocument()
+    expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
+    expect(screen.getByText('contatos no total')).toBeInTheDocument()
+  })
+
+  it('sem contato real, a lista se identifica como exemplo', async () => {
+    montar(<ListaContatos contatos={[]} etiquetas={[]} />)
+    expect(await screen.findByText('Lívia Torri')).toBeInTheDocument()
+    expect(screen.getByText('contatos de exemplo')).toBeInTheDocument()
+  })
+
+  it('contato sem etiqueta diz isso, em vez de inventar uma', async () => {
+    montar(
+      <ListaContatos
+        contatos={[{ ...salvos[0], etiqueta: null }]}
+        etiquetas={[]}
+      />,
+    )
+    expect(await screen.findByText('sem etiqueta')).toBeInTheDocument()
   })
 })

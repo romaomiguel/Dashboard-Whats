@@ -23,8 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { conexoes } from '@/lib/data'
+import type { Etiqueta } from '@/lib/etiquetas'
 
-export function NovoDisparoDialog() {
+export function NovoDisparoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
   return (
     <Dialog>
       <DialogTrigger render={<Button className="gap-2" />}>
@@ -67,9 +68,13 @@ export function NovoDisparoDialog() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os contatos</SelectItem>
-                  <SelectItem value="vip">Apenas VIP</SelectItem>
-                  <SelectItem value="clientes">Clientes</SelectItem>
-                  <SelectItem value="leads">Leads</SelectItem>
+                  {/* Público sai das etiquetas que o usuário cadastrou; a
+                      lista fixa de antes citava grupos que não existiam. */}
+                  {etiquetas.map((etiqueta) => (
+                    <SelectItem key={etiqueta.id} value={etiqueta.id}>
+                      {etiqueta.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
