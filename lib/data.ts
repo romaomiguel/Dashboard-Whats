@@ -92,3 +92,53 @@ export const mensagensRecentes: Mensagem[] = [
     status: 'entregue',
   },
 ]
+
+export type Contato = {
+  nome: string
+  numero: string
+  tag: 'Cliente' | 'Lead' | 'VIP' | 'Inativo'
+  ultimaInteracao: string
+}
+
+export const contatos: Contato[] = [
+  { nome: 'Lívia Torri', numero: '+55 11 91234-5678', tag: 'VIP', ultimaInteracao: 'Hoje, 09:42' },
+  { nome: 'Miro Baptista', numero: '+55 21 99876-5432', tag: 'Cliente', ultimaInteracao: 'Hoje, 09:31' },
+  { nome: 'Helena Duarte', numero: '+55 31 98765-1122', tag: 'Lead', ultimaInteracao: 'Hoje, 09:18' },
+  { nome: 'Rafael Nunes', numero: '+55 41 97654-3210', tag: 'Cliente', ultimaInteracao: 'Ontem, 18:04' },
+  { nome: 'Camila Rocha', numero: '+55 51 96543-2109', tag: 'Lead', ultimaInteracao: 'Ontem, 15:22' },
+  { nome: 'Bruno Alves', numero: '+55 61 95432-1098', tag: 'Inativo', ultimaInteracao: '3 dias atrás' },
+  { nome: 'Sofia Martins', numero: '+55 71 94321-0987', tag: 'VIP', ultimaInteracao: '4 dias atrás' },
+  { nome: 'Diego Ferraz', numero: '+55 81 93210-9876', tag: 'Cliente', ultimaInteracao: '1 semana atrás' },
+]
+
+export type Midia = {
+  nome: string
+  tipo: 'imagem' | 'video' | 'documento' | 'audio'
+  tamanho: string
+  data: string
+}
+
+export const midias: Midia[] = [
+  { nome: 'promo-black-friday.jpg', tipo: 'imagem', tamanho: '1.2 MB', data: '19 ago 2026' },
+  { nome: 'catalogo-2026.pdf', tipo: 'documento', tamanho: '3.8 MB', data: '18 ago 2026' },
+  { nome: 'demonstracao-produto.mp4', tipo: 'video', tamanho: '12.4 MB', data: '17 ago 2026' },
+  { nome: 'audio-boas-vindas.ogg', tipo: 'audio', tamanho: '640 KB', data: '16 ago 2026' },
+  { nome: 'banner-lancamento.png', tipo: 'imagem', tamanho: '890 KB', data: '15 ago 2026' },
+  { nome: 'tabela-precos.pdf', tipo: 'documento', tamanho: '512 KB', data: '14 ago 2026' },
+]
+
+export type Disparo = {
+  nome: string
+  status: 'enviando' | 'agendado' | 'concluido' | 'rascunho'
+  total: number
+  entregues: number
+  data: string
+}
+
+export const disparos: Disparo[] = [
+  { nome: 'Promoção Black Friday', status: 'enviando', total: 3200, entregues: 1840, data: 'Hoje, 10:00' },
+  { nome: 'Reengajamento inativos', status: 'agendado', total: 1500, entregues: 0, data: 'Amanhã, 08:00' },
+  { nome: 'Confirmação de pedidos', status: 'concluido', total: 980, entregues: 962, data: 'Ontem, 14:30' },
+  { nome: 'Novidades do catálogo', status: 'concluido', total: 2400, entregues: 2311, data: '2 dias atrás' },
+  { nome: 'Pesquisa de satisfação', status: 'rascunho', total: 0, entregues: 0, data: '—' },
+]

@@ -1,21 +1,16 @@
+import Link from 'next/link'
 import { Bell, Search, Send } from 'lucide-react'
 import { sair } from '@/app/login/actions'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { TituloPagina } from '@/components/titulo-pagina'
 
 export function Topbar({ email }: { email: string }) {
   return (
     <header className="flex flex-col gap-4 border-b border-border bg-background/80 px-6 py-4 backdrop-blur md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Monitoramento de WhatsApp em tempo real
-        </p>
-      </div>
+      <TituloPagina />
 
       <div className="flex items-center gap-2">
         <div className="relative hidden sm:block">
@@ -27,7 +22,7 @@ export function Topbar({ email }: { email: string }) {
           />
         </div>
 
-        <Button className="gap-2">
+        <Button render={<Link href="/disparos" />} className="gap-2">
           <Send className="size-4" />
           <span className="hidden sm:inline">Novo disparo</span>
         </Button>

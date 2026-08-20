@@ -13,26 +13,91 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useDadosExemplo } from '@/components/dados-exemplo-provider'
+import { Badge } from '@/components/ui/badge'
+import { summary } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
 export type ItemNav = {
   href: string
   label: string
+  /** Linha de apoio mostrada na topbar quando a rota está ativa. */
+  subtitulo: string
   icon: LucideIcon
   secao: 'principal' | 'sistema'
+  /** Contador exibido como selo; só aparece com dados de exemplo ligados. */
+  contador?: number
 }
 
 export const ITENS_NAV: ItemNav[] = [
-  { href: '/', label: 'Home', icon: Home, secao: 'principal' },
-  { href: '/conexao', label: 'Conexão', icon: Link2, secao: 'principal' },
-  { href: '/contatos', label: 'Contatos', icon: Contact, secao: 'principal' },
-  { href: '/mensagens', label: 'Mensagens', icon: MessageCircle, secao: 'principal' },
-  { href: '/midias', label: 'Mídias', icon: ImageIcon, secao: 'principal' },
-  { href: '/configuracoes', label: 'Configurações', icon: Settings, secao: 'sistema' },
-  { href: '/disparos', label: 'Disparos', icon: Send, secao: 'sistema' },
+  {
+    href: '/',
+    label: 'Home',
+    subtitulo: 'Monitoramento de WhatsApp em tempo real',
+    icon: Home,
+    secao: 'principal',
+  },
+  {
+    href: '/conexao',
+    label: 'Conexão',
+    subtitulo: 'Gerencie as instâncias de WhatsApp conectadas',
+    icon: Link2,
+    secao: 'principal',
+  },
+  {
+    href: '/contatos',
+    label: 'Contatos',
+    subtitulo: 'Sua base de contatos e segmentação',
+    icon: Contact,
+    secao: 'principal',
+    contador: summary.contatos,
+  },
+  {
+    href: '/mensagens',
+    label: 'Mensagens',
+    subtitulo: 'Conversas e histórico de atendimento',
+    icon: MessageCircle,
+    secao: 'principal',
+    contador: summary.mensagens,
+  },
+  {
+    href: '/midias',
+    label: 'Mídias',
+    subtitulo: 'Biblioteca de imagens, vídeos e documentos',
+    icon: ImageIcon,
+    secao: 'principal',
+  },
+  {
+    href: '/configuracoes',
+    label: 'Configurações',
+    subtitulo: 'Preferências da conta e do sistema',
+    icon: Settings,
+    secao: 'sistema',
+  },
+  {
+    href: '/disparos',
+    label: 'Disparos',
+    subtitulo: 'Campanhas e envios em massa',
+    icon: Send,
+    secao: 'sistema',
+  },
 ]
 
-function LinkNav({ item, ativo }: { item: ItemNav; ativo: boolean }) {
+/** 4820 vira "4.8k"; abaixo de mil o número vai inteiro. */
+export function formatarContador(n: number) {
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace('.0', '')}k`
+  return String(n)
+}
+
+function LinkNav({
+  item,
+  ativo,
+  contador,
+}: {
+  item: ItemNav
+  ativo: boolean
+  contador?: number
+}) {
   const Icon = item.icon
   return (
     <Link
@@ -47,12 +112,26 @@ function LinkNav({ item, ativo }: { item: ItemNav; ativo: boolean }) {
     >
       <Icon className="size-[18px] shrink-0" />
       <span className="flex-1 text-left">{item.label}</span>
+      {typeof contador === 'number' && (
+        <Badge
+          variant="secondary"
+          className={cn(
+            'min-w-6 justify-center rounded-full px-1.5 font-mono text-[11px] tabular-nums',
+            ativo
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {formatarContador(contador)}
+        </Badge>
+      )}
     </Link>
   )
 }
 
 export function Sidebar() {
   const caminho = usePathname()
+  const { mostrarExemplo } = useDadosExemplo()
 
   // Comparação exata: startsWith deixaria a Home sempre ativa.
   const ehAtivo = (href: string) =>
@@ -60,6 +139,9 @@ export function Sidebar() {
 
   const principais = ITENS_NAV.filter((i) => i.secao === 'principal')
   const sistema = ITENS_NAV.filter((i) => i.secao === 'sistema')
+
+  const ativas = mostrarExemplo ? summary.conexoesAtivas : 0
+  const total = mostrarExemplo ? summary.conexoesTotal : 0
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
@@ -78,7 +160,12 @@ export function Sidebar() {
           Menu principal
         </p>
         {principais.map((item) => (
-          <LinkNav key={item.href} item={item} ativo={ehAtivo(item.href)} />
+          <LinkNav
+            key={item.href}
+            item={item}
+            ativo={ehAtivo(item.href)}
+            contador={mostrarExemplo ? item.contador : undefined}
+          />
         ))}
 
         <div className="my-4 h-px bg-sidebar-border" />
@@ -87,9 +174,30 @@ export function Sidebar() {
           Sistema
         </p>
         {sistema.map((item) => (
-          <LinkNav key={item.href} item={item} ativo={ehAtivo(item.href)} />
+          <LinkNav
+            key={item.href}
+            item={item}
+            ativo={ehAtivo(item.href)}
+            contador={mostrarExemplo ? item.contador : undefined}
+          />
         ))}
       </nav>
+
+      <div className="border-t border-sidebar-border p-3">
+        <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent/60 px-3 py-2.5">
+          <span className="flex size-2 items-center justify-center">
+            <span
+              className={cn(
+                'size-2 rounded-full',
+                ativas > 0 ? 'animate-pulse bg-primary' : 'bg-muted-foreground/40',
+              )}
+            />
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {ativas} de {total} conexões online
+          </p>
+        </div>
+      </div>
     </aside>
   )
 }

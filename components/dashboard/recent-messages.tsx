@@ -7,16 +7,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { mensagensRecentes, type Mensagem } from '@/lib/data'
+import { iniciais } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
-}
 
 function StatusIcon({ status }: { status: Mensagem['status'] }) {
   if (status === 'entregue')
@@ -51,7 +43,7 @@ export function RecentMessages() {
             <div key={m.numero} className="flex items-center gap-3 py-3 first:pt-0">
               <Avatar className="size-10">
                 <AvatarFallback className="bg-primary/12 text-xs font-medium text-primary">
-                  {initials(m.contato)}
+                  {iniciais(m.contato)}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
