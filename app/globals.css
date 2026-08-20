@@ -2,6 +2,12 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
+/* O scanner do Tailwind lê todos os fontes do projeto. Um teste que cite uma
+   string com forma de classe — uma carga de ataque, por exemplo — viraria
+   regra de verdade aqui e podia até quebrar o build. Testes não desenham
+   tela; ficam fora da varredura. */
+@source not '../**/__tests__/**';
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

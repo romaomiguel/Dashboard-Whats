@@ -125,11 +125,11 @@ describe('criarEtiqueta', () => {
     expect(banco.inserts).toHaveLength(0)
   })
 
+  // A carga aqui é de propósito uma string qualquer, e não algo com forma de
+  // classe do Tailwind: o scanner do Tailwind lê os fontes do projeto, e uma
+  // classe escrita num teste vira regra de verdade na folha de estilo.
   it('recusa cor fora da lista, para não gravar CSS arbitrário', async () => {
-    const estado = await criarEtiqueta(
-      {},
-      form({ nome: 'X', cor: 'bg-[url(javascript:alert(1))]' }),
-    )
+    const estado = await criarEtiqueta({}, form({ nome: 'X', cor: 'vermelho-neon' }))
 
     expect(estado.erro).toMatch(/cor da lista/)
     expect(banco.inserts).toHaveLength(0)
