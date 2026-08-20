@@ -30,6 +30,15 @@ async function usuarioAtual() {
 
 /** Erro da Evolution traduzido para algo acionável na tela. */
 function mensagemEvolution(erro: unknown): string {
+  // Sem isto, uma falha da Evolution só existia como texto na tela e não
+  // dava para saber, do servidor, o que tinha acontecido.
+  console.error(
+    '[conexao]',
+    erro instanceof EvolutionError
+      ? `${erro.kind}: ${erro.message}${erro.status ? ` (HTTP ${erro.status})` : ''}`
+      : erro,
+  )
+
   if (erro instanceof EvolutionError) {
     if (erro.kind === 'configuracao') {
       return 'A Evolution API não está configurada no .env.'
