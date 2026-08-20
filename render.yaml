@@ -23,22 +23,11 @@ services:
       # de novo a cada deploy. Esta fica ligada.
       - key: DATABASE_SAVE_DATA_INSTANCE
         value: "true"
-      # As demais ficam desligadas de propósito. Ligadas, a Evolution despeja
-      # o histórico inteiro do WhatsApp — mensagens, cada atualização de
-      # status, a agenda toda e todas as conversas — no mesmo Postgres do
-      # Supabase, e no plano free isso é o que consome a memória.
-      #
-      # O ZapCRM não lê nada disso: ele guarda a própria cópia do que envia e
-      # do que recebe em public.mensagens, alimentada pelo webhook. Os
-      # endpoints findContacts, findChats e findMessages não são usados.
-      #
-      # Desligar aqui não afeta o webhook: ele continua entregando os eventos,
-      # inclusive os recibos de entrega e leitura. O que muda é só a Evolution
-      # parar de arquivar o que ninguém consulta.
-      - key: DATABASE_SAVE_DATA_NEW_MESSAGE
-        value: "false"
-      - key: DATABASE_SAVE_MESSAGE_UPDATE
-        value: "false"
+      # Estas quatro guardam o que o ZapCRM nunca consulta: a agenda inteira
+      # do WhatsApp, todas as conversas, as etiquetas e o histórico antigo que
+      # o celular despeja ao conectar. Nenhuma tela lê o schema da Evolution —
+      # os endpoints findContacts, findChats e findMessages não são chamados
+      # em lugar nenhum do app.
       - key: DATABASE_SAVE_DATA_CONTACTS
         value: "false"
       - key: DATABASE_SAVE_DATA_CHATS
@@ -47,6 +36,23 @@ services:
         value: "false"
       - key: DATABASE_SAVE_DATA_HISTORIC
         value: "false"
+
+      # Estas duas ficam LIGADAS por ora.
+      #
+      # A aba de Mensagens depende do webhook, não do banco da Evolution: o
+      # que entra é gravado em public.mensagens pelo receptor, e os recibos de
+      # entrega e leitura chegam por MESSAGES_UPDATE. Só que não consegui
+      # confirmar, no código da v2.3.7, se desligar a persistência silencia
+      # também a emissão do evento. Até haver teste, o risco de perder a aba
+      # de Mensagens não compensa o espaço economizado.
+      #
+      # Como testar, em dois minutos e reversível: desligue as duas, reinicie,
+      # mande uma mensagem de outro celular para o número conectado e veja se
+      # ela aparece em Mensagens. Aparecendo, pode deixar desligado.
+      - key: DATABASE_SAVE_DATA_NEW_MESSAGE
+        value: "true"
+      - key: DATABASE_SAVE_MESSAGE_UPDATE
+        value: "true"
       - key: CACHE_REDIS_ENABLED
         value: "false"
       - key: CACHE_LOCAL_ENABLED

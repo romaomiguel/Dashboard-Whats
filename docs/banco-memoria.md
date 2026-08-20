@@ -53,19 +53,48 @@ O `render.yaml` já traz a configuração corrigida, mas o Render lê as variáv
 do painel, não do arquivo — **as mudanças precisam ser feitas lá também**, em
 Environment, e o serviço reiniciado:
 
-| Variável | Antes | Agora | Porquê |
-|---|---|---|---|
-| `DATABASE_SAVE_DATA_INSTANCE` | true | **true** | Mantém a sessão entre reinícios; sem ela o QR teria de ser lido a cada deploy |
-| `DATABASE_SAVE_DATA_NEW_MESSAGE` | true | **false** | O ZapCRM guarda a própria cópia em `public.mensagens` |
-| `DATABASE_SAVE_MESSAGE_UPDATE` | true | **false** | Gera várias linhas por mensagem, uma por mudança de status |
-| `DATABASE_SAVE_DATA_CONTACTS` | true | **false** | A agenda inteira do WhatsApp, que o app não lê |
-| `DATABASE_SAVE_DATA_CHATS` | true | **false** | Todas as conversas, idem |
-| `DATABASE_SAVE_DATA_LABELS` | — | **false** | Idem |
-| `DATABASE_SAVE_DATA_HISTORIC` | — | **false** | Histórico antigo sincronizado na conexão |
+### Desligar agora — verificado
 
-Desligar isso **não afeta o webhook**: a Evolution continua entregando os
-eventos, inclusive os recibos de entrega e leitura que alimentam o funil da
-Home. O que muda é ela parar de arquivar o que ninguém consulta.
+Nenhuma tela do ZapCRM lê o schema da Evolution. Conferido no código: a aba de
+Mensagens lê `public.mensagens`, Contatos lê `public.contatos`, e o status de
+conexão vem de uma chamada HTTP ao vivo em `/instance/connectionState`. Os
+endpoints `findContacts`, `findChats` e `findMessages` estão definidos mas não
+são chamados em lugar nenhum.
+
+| Variável | Para | Porquê |
+|---|---|---|
+| `DATABASE_SAVE_DATA_INSTANCE` | **continua true** | Guarda a sessão. Sem ela, o QR precisaria ser lido a cada reinício |
+| `DATABASE_SAVE_DATA_CONTACTS` | **false** | A agenda inteira do WhatsApp, que o app nunca lê |
+| `DATABASE_SAVE_DATA_CHATS` | **false** | Todas as conversas, idem |
+| `DATABASE_SAVE_DATA_LABELS` | **false** | Idem |
+| `DATABASE_SAVE_DATA_HISTORIC` | **false** | O histórico antigo que o celular despeja ao conectar — provavelmente o maior volume de todos |
+
+### Manter ligado por ora — não verificado
+
+| Variável | Para | Porquê |
+|---|---|---|
+| `DATABASE_SAVE_DATA_NEW_MESSAGE` | **continua true** | Ver abaixo |
+| `DATABASE_SAVE_MESSAGE_UPDATE` | **continua true** | Ver abaixo |
+
+A aba de Mensagens depende do **webhook**, não do banco da Evolution: o que
+chega é gravado em `public.mensagens` pelo receptor, e os recibos de entrega e
+leitura vêm pelo evento `MESSAGES_UPDATE`. Em teoria as duas coisas são
+independentes — persistir e emitir evento são caminhos separados.
+
+Só que **não consegui confirmar isso no código da v2.3.7**: o repositório não
+estava acessível para leitura e a documentação não cobre a interação. Sem essa
+confirmação, desligar arrisca a aba de Mensagens parar de receber, e o espaço
+economizado não compensa.
+
+**Como testar, em dois minutos e reversível:**
+
+1. Desligue as duas no painel do Render e reinicie o serviço.
+2. Mande uma mensagem de outro celular para o número conectado.
+3. Abra a aba de Mensagens.
+
+Aparecendo a mensagem, pode deixar desligado — e aí some também o maior
+gerador de linhas, que é uma por mudança de status de cada mensagem. Não
+aparecendo, religue as duas: a perda é só de espaço.
 
 ## 3. Limpar o que já foi acumulado
 
