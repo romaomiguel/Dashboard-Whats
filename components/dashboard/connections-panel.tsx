@@ -4,6 +4,8 @@ import { BatteryFull, BatteryLow, Smartphone } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { EstadoVazio } from '@/components/estado-vazio'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Conexao as ConexaoReal } from '@/lib/conexoes'
+import { ROTULO_STATUS } from '@/lib/conexoes'
 import { conexoes, type Conexao } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
@@ -19,8 +21,40 @@ const statusDot: Record<Conexao['status'], string> = {
   conectando: 'bg-amber-500',
 }
 
-export function ConnectionsPanel() {
+type Linha = {
+  chave: string
+  nome: string
+  numero: string
+  status: Conexao['status']
+  bateria: number | null
+}
+
+export function ConnectionsPanel({ conexoes: reais }: { conexoes: ConexaoReal[] }) {
   const { mostrarExemplo } = useDadosExemplo()
+
+  const temReais = reais.length > 0
+  const lista: Linha[] = temReais
+    ? reais.map((c) => ({
+        chave: c.id,
+        nome: c.nome,
+        // Bateria só existiria com o aparelho reportando; não inventar.
+        numero: c.numero ?? ROTULO_STATUS[c.status],
+        status:
+          c.status === 'conectada'
+            ? 'online'
+            : c.status === 'desconectada'
+              ? 'offline'
+              : 'conectando',
+        bateria: null,
+      }))
+    : conexoes.map((c) => ({
+        chave: c.numero,
+        nome: c.nome,
+        numero: c.numero,
+        status: c.status,
+        bateria: c.bateria,
+      }))
+  const mostrar = temReais || mostrarExemplo
 
   return (
     <Card className="h-full">
@@ -29,10 +63,10 @@ export function ConnectionsPanel() {
         <p className="text-sm text-muted-foreground">Sessões de WhatsApp</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {mostrarExemplo ? (
-          conexoes.map((c) => (
+        {mostrar ? (
+          lista.map((c) => (
             <div
-              key={c.numero}
+              key={c.chave}
               className="flex items-center gap-3 rounded-lg border border-border p-3"
             >
               <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -57,7 +91,7 @@ export function ConnectionsPanel() {
                   />
                   {statusLabel[c.status]}
                 </span>
-                {c.status !== 'offline' && (
+                {c.status !== 'offline' && c.bateria !== null && (
                   <span className="flex items-center gap-1 font-mono text-xs text-muted-foreground tabular-nums">
                     {c.bateria > 30 ? (
                       <BatteryFull className="size-3.5" />

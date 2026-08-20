@@ -42,7 +42,9 @@ describe.skipIf(!configurado)('RLS de instances', () => {
     const { data: usuarioA } = await clienteA.auth.getUser()
     const ownerA = usuarioA.user!.id
 
-    await admin.from('instances').delete().eq('owner_id', ownerA)
+    // Nada de limpar por owner_id: isso apagaria a conexão real do usuário,
+    // com o WhatsApp dela conectado, e levaria disparos e mensagens juntos
+    // pelo cascade. O teste cria a sua e remove só a sua, no afterAll.
     const { data, error } = await admin
       .from('instances')
       // nome virou obrigatório e único por usuário na migration 0005; o
@@ -56,7 +58,7 @@ describe.skipIf(!configurado)('RLS de instances', () => {
       .single()
     if (error) throw new Error(error.message)
     idDoA = data.id
-  })
+  }, 30_000)
 
   it('o dono lê a própria instância', async () => {
     const clienteA = await entrar('teste-a@exemplo.com')
@@ -96,5 +98,5 @@ describe.skipIf(!configurado)('RLS de instances', () => {
       auth: { persistSession: false },
     })
     await admin.from('instances').delete().eq('id', idDoA)
-  })
+  }, 30_000)
 })

@@ -27,11 +27,14 @@ type Linha = {
 }
 
 const ESTILO = {
+  // Do banco
+  enviada: 'bg-muted text-muted-foreground',
+  entregue: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  lida: 'bg-primary/15 text-primary',
   recebida: 'bg-primary/15 text-primary',
-  enviada: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
   falhou: 'bg-destructive/15 text-destructive',
-  entregue: 'bg-muted text-muted-foreground',
-  lida: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  // Dos dados de exemplo
+  entregue_exemplo: 'bg-muted text-muted-foreground',
   respondida: 'bg-primary/15 text-primary',
 } as const
 
@@ -47,7 +50,7 @@ function doBanco(conversas: Conversa[]): Linha[] {
         ? 'falhou'
         : c.direcao === 'entrada'
           ? 'respondeu'
-          : 'enviada',
+          : c.status,
     estilo: ESTILO[c.status],
     erro: c.status === 'falhou',
   }))

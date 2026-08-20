@@ -11,6 +11,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import type { EtapaFunil } from '@/lib/resumo'
 import { deliveryScale, summary } from '@/lib/data'
 
 const chartConfig = {
@@ -20,8 +21,14 @@ const chartConfig = {
   respondidas: { label: 'Respondidas', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
-export function DeliveryScaleChart() {
+export function DeliveryScaleChart({ funil }: { funil: EtapaFunil[] }) {
   const { mostrarExemplo } = useDadosExemplo()
+
+  const temMovimento = funil.some((e) => e.valor > 0)
+  const dados = temMovimento ? funil : deliveryScale
+  const mostrar = temMovimento || mostrarExemplo
+  const taxa = (etapa: string) =>
+    (temMovimento ? funil : deliveryScale).find((e) => e.etapa === etapa)?.valor ?? 0
 
   return (
     <Card className="h-full">
@@ -32,14 +39,14 @@ export function DeliveryScaleChart() {
         </p>
       </CardHeader>
       <CardContent className="flex flex-col items-center">
-        {mostrarExemplo ? (
+        {mostrar ? (
           <>
             <ChartContainer
               config={chartConfig}
               className="mx-auto aspect-square h-[220px]"
             >
               <RadialBarChart
-                data={deliveryScale}
+                data={dados}
                 innerRadius={40}
                 outerRadius={110}
                 startAngle={90}
@@ -55,7 +62,7 @@ export function DeliveryScaleChart() {
             </ChartContainer>
 
             <div className="mt-2 grid w-full grid-cols-3 gap-2 text-center">
-              {deliveryScale.map((item, i) => (
+              {dados.map((item, i) => (
                 <div key={item.etapa} className="rounded-lg bg-muted/60 py-2">
                   <p
                     className="font-mono text-lg font-semibold tabular-nums"
@@ -71,7 +78,7 @@ export function DeliveryScaleChart() {
             <p className="mt-3 text-center text-xs text-muted-foreground">
               Taxa média de entrega de{' '}
               <span className="font-medium text-foreground">
-                {summary.taxaEntrega}%
+                {taxa('Entregues')}%
               </span>{' '}
               nas últimas campanhas
             </p>

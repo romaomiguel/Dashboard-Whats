@@ -6,6 +6,7 @@ import {
   DadosExemploProvider,
 } from '@/components/dados-exemplo-provider'
 import { SeloDadosExemplo } from '@/components/selo-dados-exemplo'
+import { RESUMO_VAZIO } from '@/lib/consultas/resumo'
 import { StatCards } from '@/components/dashboard/stat-cards'
 
 function montar(ui: React.ReactNode) {
@@ -41,7 +42,7 @@ describe('dados de exemplo', () => {
     montar(
       <>
         <SeloDadosExemplo />
-        <StatCards />
+        <StatCards resumo={RESUMO_VAZIO} />
       </>,
     )
     expect(await screen.findByText('4.820')).toBeInTheDocument()
@@ -57,7 +58,7 @@ describe('dados de exemplo', () => {
     montar(
       <>
         <SeloDadosExemplo />
-        <StatCards />
+        <StatCards resumo={RESUMO_VAZIO} />
       </>,
     )
     await userEvent.click(

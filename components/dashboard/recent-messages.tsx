@@ -6,6 +6,8 @@ import { EstadoVazio } from '@/components/estado-vazio'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Conversa } from '@/lib/consultas/mensagens'
+import { formatarHora } from '@/lib/datas'
 import { mensagensRecentes, type Mensagem } from '@/lib/data'
 import { iniciais } from '@/lib/iniciais'
 import { cn } from '@/lib/utils'
@@ -23,8 +25,48 @@ function StatusIcon({ status }: { status: Mensagem['status'] }) {
   )
 }
 
-export function RecentMessages() {
+type Linha = {
+  chave: string
+  contato: string
+  previa: string
+  hora: string
+  naoLidas: number
+  status: Mensagem['status']
+}
+
+/** Conversa do banco no formato que este cartão já sabia desenhar. */
+function daConversa(c: Conversa): Linha {
+  return {
+    chave: c.numero,
+    contato: c.nome,
+    previa: c.previa,
+    hora: formatarHora(c.quando),
+    naoLidas: c.naoLidas,
+    status:
+      c.direcao === 'entrada'
+        ? 'respondida'
+        : (c.status as string) === 'lida'
+          ? 'lida'
+          : 'entregue',
+
+  }
+}
+
+export function RecentMessages({ conversas }: { conversas: Conversa[] }) {
   const { mostrarExemplo } = useDadosExemplo()
+
+  const temReais = conversas.length > 0
+  const lista: Linha[] = temReais
+    ? conversas.slice(0, 5).map(daConversa)
+    : mensagensRecentes.map((m) => ({
+        chave: m.numero,
+        contato: m.contato,
+        previa: m.previa,
+        hora: m.hora,
+        naoLidas: m.naoLidas,
+        status: m.status,
+      }))
+  const mostrar = temReais || mostrarExemplo
 
   return (
     <Card>
@@ -34,13 +76,13 @@ export function RecentMessages() {
           <p className="text-sm text-muted-foreground">Conversas ativas</p>
         </div>
         <Badge variant="secondary" className="rounded-full">
-          {mostrarExemplo ? mensagensRecentes.length : 0} conversas
+          {mostrar ? lista.length : 0} conversas
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col divide-y divide-border">
-        {mostrarExemplo ? (
-          mensagensRecentes.map((m) => (
-            <div key={m.numero} className="flex items-center gap-3 py-3 first:pt-0">
+        {mostrar ? (
+          lista.map((m) => (
+            <div key={m.chave} className="flex items-center gap-3 py-3 first:pt-0">
               <Avatar className="size-10">
                 <AvatarFallback className="bg-primary/12 text-xs font-medium text-primary">
                   {iniciais(m.contato)}

@@ -13,6 +13,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import type { DiaDaSemana } from '@/lib/resumo'
 import { weeklyMessages } from '@/lib/data'
 
 const chartConfig = {
@@ -26,8 +27,13 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function MessagesBarChart() {
+export function MessagesBarChart({ semana }: { semana: DiaDaSemana[] }) {
   const { mostrarExemplo } = useDadosExemplo()
+
+  // Semana com algum movimento manda; sem nada gravado, cai no exemplo.
+  const temMovimento = semana.some((d) => d.enviadas > 0 || d.recebidas > 0)
+  const dados = temMovimento ? semana : weeklyMessages
+  const mostrar = temMovimento || mostrarExemplo
 
   return (
     <Card className="h-full">
@@ -46,9 +52,9 @@ export function MessagesBarChart() {
         </div>
       </CardHeader>
       <CardContent>
-        {mostrarExemplo ? (
+        {mostrar ? (
           <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <BarChart data={weeklyMessages} barGap={6}>
+            <BarChart data={dados} barGap={6}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis
                 dataKey="dia"

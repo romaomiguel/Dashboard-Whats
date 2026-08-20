@@ -68,12 +68,19 @@ export async function processarLote(
   for (const envio of pendentes) {
     const numero = String(envio.numero)
     let erro: string | null = null
+    let chave: string | null = null
 
     try {
-      await chamar(endpoints.mensagem.texto(String(instancia.evolution_name)), {
-        metodo: 'POST',
-        corpo: { number: numero, text: disparo.mensagem },
-      })
+      const resposta = await chamar<{ key?: { id?: string } }>(
+        endpoints.mensagem.texto(String(instancia.evolution_name)),
+        {
+          metodo: 'POST',
+          corpo: { number: numero, text: disparo.mensagem },
+        },
+      )
+      // Guardar o id é o que permite ao webhook dizer depois se foi entregue
+      // e se foi lida.
+      chave = resposta?.key?.id ?? null
       enviados += 1
     } catch (causa) {
       erro = causa instanceof Error ? causa.message : 'erro desconhecido'
@@ -102,6 +109,7 @@ export async function processarLote(
       status: erro ? 'falhou' : 'enviada',
       texto: disparo.mensagem,
       erro: erro ? erro.slice(0, 300) : null,
+      mensagem_key: chave,
     })
 
     await dormir(PAUSA_ENTRE_ENVIOS_MS)

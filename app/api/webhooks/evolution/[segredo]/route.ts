@@ -21,6 +21,55 @@ function textoDaMensagem(dados: unknown): string | null {
   return null
 }
 
+/** Ordem do funil: um recibo nunca pode rebaixar o que já se sabe. */
+const POSICAO: Record<string, number> = {
+  enviada: 1,
+  entregue: 2,
+  lida: 3,
+}
+
+/**
+ * Aplica o recibo de entrega ou leitura à mensagem correspondente.
+ *
+ * O casamento é pelo id que a Evolution devolveu no envio e que o disparo
+ * guardou em mensagem_key.
+ */
+async function registrarRecibo(evento: EventoWebhook) {
+  const dados = evento.data as {
+    key?: { id?: string }
+    status?: string
+  } | null
+
+  const chave = dados?.key?.id
+  const bruto = String(dados?.status ?? '').toUpperCase()
+  if (!chave) return
+
+  const novo =
+    bruto === 'READ' || bruto === 'PLAYED'
+      ? 'lida'
+      : bruto === 'DELIVERY_ACK'
+        ? 'entregue'
+        : null
+
+  if (!novo) return
+
+  const admin = criarClienteAdmin()
+
+  const { data: mensagem } = await admin
+    .from('mensagens')
+    .select('id, status')
+    .eq('mensagem_key', chave)
+    .maybeSingle()
+
+  if (!mensagem) return
+
+  // Fora de ordem acontece: leitura pode chegar antes da entrega.
+  const atual = POSICAO[String(mensagem.status)] ?? 0
+  if (atual >= POSICAO[novo]) return
+
+  await admin.from('mensagens').update({ status: novo }).eq('id', mensagem.id)
+}
+
 /** Grava a mensagem recebida, para a tela de Mensagens ter o que mostrar. */
 async function registrarRecebida(evento: EventoWebhook) {
   const dados = evento.data as {
@@ -87,14 +136,14 @@ export async function POST(
 
   console.info('[webhook]', evento.event, evento.instance)
 
-  if (evento.event === 'messages.upsert' || evento.event === 'MESSAGES_UPSERT') {
-    // Falha aqui não pode virar erro para a Evolution: ela reenviaria o
-    // evento em laço.
-    try {
-      await registrarRecebida(evento)
-    } catch (erro) {
-      console.error('[webhook] falha ao gravar mensagem recebida:', erro)
-    }
+  // Falha aqui não pode virar erro para a Evolution: ela reenviaria o evento
+  // em laço.
+  try {
+    const tipo = evento.event.toUpperCase().replace('.', '_')
+    if (tipo === 'MESSAGES_UPSERT') await registrarRecebida(evento)
+    if (tipo === 'MESSAGES_UPDATE') await registrarRecibo(evento)
+  } catch (erro) {
+    console.error('[webhook] falha ao processar evento:', erro)
   }
 
   // Responder 200 rápido é obrigatório: a Evolution reenvia o que falhar.

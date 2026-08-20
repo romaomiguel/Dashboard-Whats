@@ -6,7 +6,7 @@ export type Conversa = {
   previa: string
   quando: string
   direcao: 'saida' | 'entrada'
-  status: 'enviada' | 'falhou' | 'recebida'
+  status: 'enviada' | 'entregue' | 'lida' | 'falhou' | 'recebida'
   naoLidas: number
 }
 

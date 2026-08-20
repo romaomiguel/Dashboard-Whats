@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { Card } from '@/components/ui/card'
+import type { Resumo } from '@/lib/consultas/resumo'
 import { summary } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
@@ -59,6 +60,46 @@ function statsExemplo(): Stat[] {
   ]
 }
 
+function statsReais(resumo: Resumo): Stat[] {
+  return [
+    {
+      label: 'Contatos',
+      value: resumo.contatos.toLocaleString('pt-BR'),
+      hint: 'total na base',
+      delta: null,
+      up: true,
+      icon: Contact,
+    },
+    {
+      label: 'Mensagens hoje',
+      value: resumo.mensagensHoje.toLocaleString('pt-BR'),
+      hint:
+        resumo.naoLidas > 0
+          ? `${resumo.naoLidas} recebidas`
+          : 'nenhuma recebida',
+      delta: null,
+      up: true,
+      icon: MessageCircle,
+    },
+    {
+      label: 'Disparos hoje',
+      value: resumo.disparosHoje.toLocaleString('pt-BR'),
+      hint: 'mensagens enviadas',
+      delta: null,
+      up: true,
+      icon: Send,
+    },
+    {
+      label: 'Conexões ativas',
+      value: `${resumo.conexoesAtivas}/${resumo.conexoesTotal}`,
+      hint: 'sessões WhatsApp',
+      delta: null,
+      up: true,
+      icon: Wifi,
+    },
+  ]
+}
+
 function statsVazios(): Stat[] {
   return [
     { label: 'Contatos', value: '0', hint: 'total na base', delta: null, up: true, icon: Contact },
@@ -68,9 +109,15 @@ function statsVazios(): Stat[] {
   ]
 }
 
-export function StatCards() {
+export function StatCards({ resumo }: { resumo: Resumo }) {
   const { mostrarExemplo } = useDadosExemplo()
-  const stats = mostrarExemplo ? statsExemplo() : statsVazios()
+
+  // Dado real manda. Só quem ainda não tem nada gravado vê o exemplo.
+  const stats = resumo.temDados
+    ? statsReais(resumo)
+    : mostrarExemplo
+      ? statsExemplo()
+      : statsVazios()
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
