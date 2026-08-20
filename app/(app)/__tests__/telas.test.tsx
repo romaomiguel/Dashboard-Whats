@@ -5,7 +5,8 @@ import {
   CHAVE_DADOS_EXEMPLO,
   DadosExemploProvider,
 } from '@/components/dados-exemplo-provider'
-import ConexaoPage from '@/app/(app)/conexao/page'
+import { SeloDadosExemplo } from '@/components/selo-dados-exemplo'
+import { ListaExemplo } from '@/app/(app)/conexao/lista-exemplo'
 import { ListaContatos } from '@/app/(app)/contatos/lista-contatos'
 import { ListaDisparos } from '@/app/(app)/disparos/lista-disparos'
 import { ListaConversas } from '@/app/(app)/mensagens/lista-conversas'
@@ -31,25 +32,25 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-describe('Conexão', () => {
+describe('Conexão — cartões de amostra', () => {
   it('lista as instâncias de exemplo', async () => {
-    montar(<ConexaoPage />)
+    montar(<ListaExemplo />)
     expect(await screen.findByText('Comercial 01')).toBeInTheDocument()
     expect(screen.getByText('3 de 4 instâncias online')).toBeInTheDocument()
   })
 
-  it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<ConexaoPage />)
-    expect(screen.getByText('Nenhuma conexão')).toBeInTheDocument()
+  it('some por inteiro quando o exemplo está desligado', async () => {
+    window.localStorage.setItem(CHAVE_DADOS_EXEMPLO, 'off')
+    montar(
+      <>
+        <SeloDadosExemplo />
+        <ListaExemplo />
+      </>,
+    )
+    await screen.findByRole('button', { name: 'Restaurar exemplo' })
+
     expect(screen.getByText('0 de 0 instâncias online')).toBeInTheDocument()
     expect(screen.queryByText('Comercial 01')).not.toBeInTheDocument()
-  })
-
-  it('oferece o diálogo de nova conexão', async () => {
-    montar(<ConexaoPage />)
-    expect(
-      await screen.findByRole('button', { name: /Nova conexão/ }),
-    ).toBeInTheDocument()
   })
 })
 

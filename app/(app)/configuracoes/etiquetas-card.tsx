@@ -86,10 +86,10 @@ export function EtiquetasCard({ etiquetas }: { etiquetas: Etiqueta[] }) {
                 key={e.id}
                 className="group flex items-center gap-3 rounded-lg border border-border px-3 py-2"
               >
+                {/* Só o selo: repetir o nome da cor ao lado dava a impressão
+                    de que aquela coluna era o nome da etiqueta. */}
                 <Badge className={ESTILO_ETIQUETA[e.cor]}>{e.nome}</Badge>
-                <span className="flex-1 text-xs text-muted-foreground">
-                  {ROTULO_COR[e.cor]}
-                </span>
+                <span className="flex-1" />
                 <Button
                   variant="ghost"
                   size="icon"

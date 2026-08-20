@@ -2,9 +2,19 @@ import { EvolutionError } from './errors'
 
 const TIMEOUT_MS = 20_000
 
+/**
+ * Timeout para a chamada que pode pegar o servidor dormindo.
+ *
+ * Medido: o plano free do Render leva ~77s para acordar, então os 20s
+ * padrão abortavam sempre a primeira chamada depois de um período parado.
+ */
+export const TIMEOUT_ACORDAR_MS = 100_000
+
 export type OpcoesChamada = {
   metodo?: 'GET' | 'POST' | 'DELETE'
   corpo?: unknown
+  /** Sobrescreve o timeout padrão; use ao chamar um servidor que pode dormir. */
+  timeoutMs?: number
 }
 
 function lerConfig() {
@@ -26,9 +36,11 @@ export async function chamar<T>(
   const { url, apikey } = lerConfig()
   const metodo = opcoes.metodo ?? 'GET'
 
-  // Timeout generoso: o plano free do Render leva ~1 min para acordar.
   const controlador = new AbortController()
-  const timer = setTimeout(() => controlador.abort(), TIMEOUT_MS)
+  const timer = setTimeout(
+    () => controlador.abort(),
+    opcoes.timeoutMs ?? TIMEOUT_MS,
+  )
 
   let resposta: Response
   try {

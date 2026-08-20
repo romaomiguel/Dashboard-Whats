@@ -1,4 +1,4 @@
-import { chamar } from './client'
+import { chamar, type OpcoesChamada } from './client'
 import { endpoints } from './endpoints'
 import { EvolutionError } from './errors'
 import type {
@@ -27,8 +27,13 @@ export function gerarNomeInstancia(): string {
   return `inst_${hex}`
 }
 
-export function criarInstancia(nome: string, urlWebhook: string) {
+export function criarInstancia(
+  nome: string,
+  urlWebhook: string,
+  opcoes: Pick<OpcoesChamada, 'timeoutMs'> = {},
+) {
   return chamar<RespostaCriarInstancia>(endpoints.instancia.criar(), {
+    ...opcoes,
     metodo: 'POST',
     corpo: {
       instanceName: nome,
@@ -44,8 +49,11 @@ export function criarInstancia(nome: string, urlWebhook: string) {
   })
 }
 
-export function conectarInstancia(nome: string) {
-  return chamar<RespostaConectar>(endpoints.instancia.conectar(nome))
+export function conectarInstancia(
+  nome: string,
+  opcoes: Pick<OpcoesChamada, 'timeoutMs'> = {},
+) {
+  return chamar<RespostaConectar>(endpoints.instancia.conectar(nome), opcoes)
 }
 
 export async function estadoInstancia(nome: string): Promise<EstadoConexao> {

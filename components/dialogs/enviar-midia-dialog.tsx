@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CloudUpload, Loader2, Upload, X } from 'lucide-react'
+import {
+  CloudUpload,
+  FileText,
+  Film,
+  ImageIcon,
+  Loader2,
+  Music,
+  Upload,
+  X,
+} from 'lucide-react'
 import { registrarMidia } from '@/app/(app)/midias/actions'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,15 +32,25 @@ import {
   caminhoNoBucket,
   formatarTamanho,
   LIMITE_TAMANHO,
+  ROTULO_TIPO,
   tipoDoArquivo,
+  type TipoMidia,
 } from '@/lib/midias'
 import { criarClienteNavegador } from '@/lib/supabase/client'
+
+const ICONE_TIPO: Record<TipoMidia, typeof ImageIcon> = {
+  imagem: ImageIcon,
+  video: Film,
+  audio: Music,
+  documento: FileText,
+}
 
 export function EnviarMidiaDialog() {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [legenda, setLegenda] = useState('')
+  const [previa, setPrevia] = useState('')
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
 
@@ -42,6 +61,24 @@ export function EnviarMidiaDialog() {
       setErro('')
     }
   }, [aberto])
+
+  const tipo = arquivo ? tipoDoArquivo(arquivo.type) : 'documento'
+  const IconeDoTipo = ICONE_TIPO[tipo]
+
+  // createObjectURL aponta para o arquivo que já está na memória do
+  // navegador: nada sobe para o Supabase nem passa pela Vercel, então a
+  // prévia não consome cota nenhuma. Só precisa ser revogada, senão o blob
+  // fica preso até a aba fechar.
+  useEffect(() => {
+    if (!arquivo || tipoDoArquivo(arquivo.type) !== 'imagem') {
+      setPrevia('')
+      return
+    }
+
+    const url = URL.createObjectURL(arquivo)
+    setPrevia(url)
+    return () => URL.revokeObjectURL(url)
+  }, [arquivo])
 
   function escolher(evento: React.ChangeEvent<HTMLInputElement>) {
     setErro('')
@@ -127,36 +164,82 @@ export function EnviarMidiaDialog() {
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <label
-            htmlFor="midia-file"
-            className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-8 text-center transition-colors hover:bg-muted/70"
-          >
-            <CloudUpload className="size-8 text-primary" />
-            <span className="text-sm font-medium text-foreground">
-              {arquivo ? arquivo.name : 'Clique para selecionar o arquivo'}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {arquivo
-                ? formatarTamanho(arquivo.size)
-                : 'Imagens, vídeos, áudios ou documentos até 16 MB'}
-            </span>
-            <Input
-              id="midia-file"
-              type="file"
-              className="hidden"
-              onChange={escolher}
-            />
-          </label>
+          {/* Escolhido o arquivo, a área de seleção dá lugar à prévia: é um
+              arquivo por vez, então oferecer "selecionar" de novo só confunde. */}
+          {arquivo ? (
+            <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-center overflow-hidden rounded-md bg-muted">
+                {previa ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previa}
+                    alt={`Prévia de ${arquivo.name}`}
+                    className="max-h-48 w-full object-contain"
+                  />
+                ) : (
+                  <div className="flex h-32 w-full items-center justify-center">
+                    <IconeDoTipo className="size-10 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
 
-          {arquivo && (
-            <button
-              type="button"
-              onClick={() => setArquivo(null)}
-              className="flex items-center gap-1.5 self-start text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p
+                    className="truncate text-sm font-medium text-foreground"
+                    title={arquivo.name}
+                  >
+                    {arquivo.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {ROTULO_TIPO[tipo]} · {formatarTamanho(arquivo.size)}
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setArquivo(null)}
+                  aria-label="Remover arquivo escolhido"
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+
+              <label
+                htmlFor="midia-file"
+                className="cursor-pointer self-start text-xs font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Escolher outro arquivo
+                <Input
+                  id="midia-file"
+                  type="file"
+                  className="hidden"
+                  onChange={escolher}
+                />
+              </label>
+            </div>
+          ) : (
+            <label
+              htmlFor="midia-file"
+              className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-8 text-center transition-colors hover:bg-muted/70"
             >
-              <X className="size-3.5" />
-              Escolher outro arquivo
-            </button>
+              <CloudUpload className="size-8 text-primary" />
+              <span className="text-sm font-medium text-foreground">
+                Clique para selecionar o arquivo
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Imagens, vídeos, áudios ou documentos até 16 MB
+              </span>
+              <Input
+                id="midia-file"
+                type="file"
+                className="hidden"
+                onChange={escolher}
+              />
+            </label>
           )}
 
           <div className="flex flex-col gap-2">
