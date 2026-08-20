@@ -21,8 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { Etiqueta } from '@/lib/etiquetas'
 
-export function NovoContatoDialog() {
+export function NovoContatoDialog({ etiquetas }: { etiquetas: Etiqueta[] }) {
   return (
     <Dialog>
       <DialogTrigger render={<Button className="gap-2" />}>
@@ -47,17 +48,24 @@ export function NovoContatoDialog() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="contato-tag">Etiqueta</Label>
-            <Select>
-              <SelectTrigger id="contato-tag">
-                <SelectValue placeholder="Selecionar etiqueta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Cliente">Cliente</SelectItem>
-                <SelectItem value="Lead">Lead</SelectItem>
-                <SelectItem value="VIP">VIP</SelectItem>
-                <SelectItem value="Inativo">Inativo</SelectItem>
-              </SelectContent>
-            </Select>
+            {etiquetas.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                Nenhuma etiqueta cadastrada. Crie as suas em Configurações.
+              </p>
+            ) : (
+              <Select>
+                <SelectTrigger id="contato-tag">
+                  <SelectValue placeholder="Selecionar etiqueta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {etiquetas.map((e) => (
+                    <SelectItem key={e.id} value={e.nome}>
+                      {e.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
         <DialogFooter>

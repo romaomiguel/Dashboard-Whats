@@ -6,9 +6,9 @@ import {
   DadosExemploProvider,
 } from '@/components/dados-exemplo-provider'
 import ConexaoPage from '@/app/(app)/conexao/page'
-import ContatosPage from '@/app/(app)/contatos/page'
+import { ListaContatos } from '@/app/(app)/contatos/lista-contatos'
 import DisparosPage from '@/app/(app)/disparos/page'
-import MensagensPage from '@/app/(app)/mensagens/page'
+import { ListaConversas } from '@/app/(app)/mensagens/lista-conversas'
 import MidiasPage from '@/app/(app)/midias/page'
 
 vi.mock('next/navigation', () => ({
@@ -55,12 +55,12 @@ describe('Conexão', () => {
 
 describe('Mensagens', () => {
   it('lista as conversas de exemplo', async () => {
-    montar(<MensagensPage />)
+    montar(<ListaConversas />)
     expect(await screen.findByText('Lívia Torri')).toBeInTheDocument()
   })
 
   it('filtra pela busca', async () => {
-    montar(<MensagensPage />)
+    montar(<ListaConversas />)
     await screen.findByText('Lívia Torri')
 
     await userEvent.type(
@@ -73,14 +73,14 @@ describe('Mensagens', () => {
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<MensagensPage />)
+    await comExemploDesligado(<ListaConversas />)
     expect(screen.getByText('Nenhuma conversa')).toBeInTheDocument()
   })
 })
 
 describe('Contatos', () => {
   it('lista e filtra os contatos de exemplo', async () => {
-    montar(<ContatosPage />)
+    montar(<ListaContatos etiquetas={[]} />)
     expect(await screen.findByText('Sofia Martins')).toBeInTheDocument()
 
     await userEvent.type(
@@ -93,7 +93,7 @@ describe('Contatos', () => {
   })
 
   it('exclui um contato da lista', async () => {
-    montar(<ContatosPage />)
+    montar(<ListaContatos etiquetas={[]} />)
     await screen.findByText('Bruno Alves')
 
     await userEvent.click(
@@ -104,7 +104,7 @@ describe('Contatos', () => {
   })
 
   it('exclui em lote o que estiver selecionado', async () => {
-    montar(<ContatosPage />)
+    montar(<ListaContatos etiquetas={[]} />)
     await screen.findByText('Lívia Torri')
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Selecionar todos' }))
@@ -114,7 +114,7 @@ describe('Contatos', () => {
   })
 
   it('mostra estado vazio quando o exemplo está desligado', async () => {
-    await comExemploDesligado(<ContatosPage />)
+    await comExemploDesligado(<ListaContatos etiquetas={[]} />)
     expect(screen.getByText('Nenhum contato')).toBeInTheDocument()
   })
 })
@@ -143,5 +143,32 @@ describe('Mídias', () => {
   it('mostra estado vazio quando o exemplo está desligado', async () => {
     await comExemploDesligado(<MidiasPage />)
     expect(screen.getByText('Biblioteca vazia')).toBeInTheDocument()
+  })
+})
+
+describe('busca vinda da topbar', () => {
+  it('Contatos já abre filtrado pelo termo da URL', async () => {
+    montar(<ListaContatos etiquetas={[]} buscaInicial="Sofia" />)
+    expect(await screen.findByText('Sofia Martins')).toBeInTheDocument()
+    expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
+  })
+
+  it('Mensagens já abre filtrada pelo termo da URL', async () => {
+    montar(<ListaConversas buscaInicial="Helena" />)
+    expect(await screen.findByText('Helena Duarte')).toBeInTheDocument()
+    expect(screen.queryByText('Rafael Nunes')).not.toBeInTheDocument()
+  })
+})
+
+describe('etiquetas do usuário', () => {
+  it('a etiqueta cadastrada manda na cor do selo', async () => {
+    montar(
+      <ListaContatos
+        etiquetas={[{ id: '1', nome: 'VIP', cor: 'roxo' }]}
+        buscaInicial="Lívia"
+      />,
+    )
+    const selo = await screen.findByText('VIP')
+    expect(selo.className).toContain('violet')
   })
 })

@@ -3,6 +3,15 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export const ROTAS_PUBLICAS = ['/login', '/api/webhooks']
 
+/**
+ * Para onde voltar depois do login: caminho mais query, nunca a origem.
+ * Guardar só o pathname perdia filtros — quem caía no login vindo de
+ * /contatos?busca=X voltava para a lista inteira.
+ */
+export function destinoDeRetorno(url: { pathname: string; search: string }) {
+  return `${url.pathname}${url.search}`
+}
+
 export function ehRotaPublica(caminho: string) {
   return ROTAS_PUBLICAS.some(
     (rota) => caminho === rota || caminho.startsWith(`${rota}/`),
@@ -41,8 +50,12 @@ export async function atualizarSessao(request: NextRequest) {
 
   if (!user && !ehRotaPublica(caminho)) {
     const url = request.nextUrl.clone()
+    const destino = destinoDeRetorno(request.nextUrl)
     url.pathname = '/login'
-    url.searchParams.set('destino', caminho)
+    // Zerar a query antes: senão os parâmetros da rota original ficam
+    // pendurados no /login junto com o destino.
+    url.search = ''
+    url.searchParams.set('destino', destino)
     return NextResponse.redirect(url)
   }
 

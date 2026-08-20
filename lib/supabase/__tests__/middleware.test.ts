@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ehRotaPublica } from '@/lib/supabase/middleware'
+import { destinoDeRetorno, ehRotaPublica } from '@/lib/supabase/middleware'
 
 describe('ehRotaPublica', () => {
   it('libera a tela de login', () => {
@@ -21,5 +21,23 @@ describe('ehRotaPublica', () => {
 
   it('não libera caminho que apenas começa parecido com /login', () => {
     expect(ehRotaPublica('/loginfalso')).toBe(false)
+  })
+})
+
+describe('destinoDeRetorno', () => {
+  it('preserva a query, para a busca não se perder no login', () => {
+    expect(destinoDeRetorno(new URL('http://localhost:3000/contatos?busca=Sofia'))).toBe(
+      '/contatos?busca=Sofia',
+    )
+  })
+
+  it('devolve só o caminho quando não há query', () => {
+    expect(destinoDeRetorno(new URL('http://localhost:3000/disparos'))).toBe('/disparos')
+  })
+
+  it('não vaza a origem', () => {
+    const destino = destinoDeRetorno(new URL('http://localhost:3000/midias?a=1'))
+    expect(destino.startsWith('/')).toBe(true)
+    expect(destino).not.toContain('localhost')
   })
 })

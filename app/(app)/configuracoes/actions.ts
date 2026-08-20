@@ -2,8 +2,18 @@
 
 import { revalidatePath } from 'next/cache'
 import { criarClienteServidor } from '@/lib/supabase/server'
+import { ehCorValida, LIMITE_NOME_ETIQUETA } from '@/lib/etiquetas'
 
 export type EstadoPerfil = { erro?: string; ok?: boolean }
+export type EstadoEtiqueta = { erro?: string; ok?: boolean }
+
+async function usuarioAtual() {
+  const supabase = await criarClienteServidor()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return { supabase, user }
+}
 
 export async function salvarPerfil(
   _estadoAnterior: EstadoPerfil,
@@ -15,22 +25,67 @@ export async function salvarPerfil(
     return { erro: 'O nome deve ter no máximo 80 caracteres.' }
   }
 
-  const supabase = await criarClienteServidor()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  // A RLS já restringe a linha ao próprio usuário; o filtro por id é a
-  // segunda tranca e evita depender só da policy.
+  // upsert, não update: uma conta criada antes do trigger de perfil não tem
+  // linha em profiles, e ali o update passava sem gravar nada e sem erro.
   const { error } = await supabase
     .from('profiles')
-    .update({ nome })
-    .eq('id', user.id)
+    .upsert({ id: user.id, nome }, { onConflict: 'id' })
 
   if (error) return { erro: 'Não foi possível salvar. Tente de novo.' }
 
-  revalidatePath('/configuracoes')
+  // O nome aparece na topbar, que vive no layout: revalidar só a rota atual
+  // deixaria a topbar exibindo o nome antigo.
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}
+
+export async function criarEtiqueta(
+  _estadoAnterior: EstadoEtiqueta,
+  formData: FormData,
+): Promise<EstadoEtiqueta> {
+  const nome = String(formData.get('nome') ?? '').trim()
+  const cor = String(formData.get('cor') ?? 'cinza')
+
+  if (!nome) return { erro: 'Dê um nome à etiqueta.' }
+  if (nome.length > LIMITE_NOME_ETIQUETA) {
+    return { erro: `O nome deve ter no máximo ${LIMITE_NOME_ETIQUETA} caracteres.` }
+  }
+  if (!ehCorValida(cor)) return { erro: 'Escolha uma cor da lista.' }
+
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  const { error } = await supabase
+    .from('etiquetas')
+    .insert({ owner_id: user.id, nome, cor })
+
+  if (error) {
+    // 23505 é a unique (owner_id, nome): etiqueta repetida é erro do usuário,
+    // não falha do sistema, e merece uma mensagem que explique.
+    if (error.code === '23505') return { erro: `Você já tem a etiqueta "${nome}".` }
+    return { erro: 'Não foi possível criar a etiqueta. Tente de novo.' }
+  }
+
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}
+
+export async function excluirEtiqueta(id: string): Promise<EstadoEtiqueta> {
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  // A RLS já limita à própria linha; o filtro por owner_id é a segunda tranca.
+  const { error } = await supabase
+    .from('etiquetas')
+    .delete()
+    .eq('id', id)
+    .eq('owner_id', user.id)
+
+  if (error) return { erro: 'Não foi possível excluir. Tente de novo.' }
+
+  revalidatePath('/', 'layout')
   return { ok: true }
 }
