@@ -23,3 +23,6 @@ coverage/
 
 # Artefatos do TypeScript
 *.tsbuildinfo
+
+# workspace do subagent-driven-development (scratch, não versionado)
+.superpowers/
