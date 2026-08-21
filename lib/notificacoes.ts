@@ -119,3 +119,39 @@ export function deveNotificarQueda(
 ): boolean {
   return estadoAnterior === 'conectada' && estadoNovo === 'close'
 }
+
+/**
+ * Chaves de notificação que perderam o objeto ao remover uma conexão.
+ *
+ * A 0011 pôs `on delete cascade` em `mensagens.instance_id`: tirando a
+ * conexão, as conversas dela vão junto. `notificacoes` não tem FK para
+ * `instances` e sobrevivia — o sino ficava com "Fulano respondeu" apontando
+ * para uma conversa que a tela de Mensagens não mostra mais, sem nenhum jeito
+ * de o usuário se livrar do aviso.
+ *
+ * `numerosRemanescentes` é o que sobrou do dono depois do cascade: com duas
+ * conexões, o mesmo contato pode ter conversa nas duas, e a notificação dele
+ * ainda tem para onde levar. A comparação passa pela forma canônica dos dois
+ * lados porque o disparo grava com o nono dígito e o webhook sem ele.
+ */
+export function chavesOrfas({
+  instanceId,
+  numerosDaConexao,
+  numerosRemanescentes,
+}: {
+  instanceId: string
+  numerosDaConexao: string[]
+  numerosRemanescentes: string[]
+}): string[] {
+  const sobrou = new Set(numerosRemanescentes.map(chaveDoNumero))
+
+  // A queda da conexão removida também não tem mais destino.
+  const chaves = new Set<string>([`conexao:${instanceId}`])
+
+  for (const numero of numerosDaConexao) {
+    const canonico = chaveDoNumero(numero)
+    if (!sobrou.has(canonico)) chaves.add(`mensagem:${canonico}`)
+  }
+
+  return [...chaves]
+}

@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SinoNotificacoes } from '@/components/sino-notificacoes'
 import type { Notificacao } from '@/lib/notificacoes'
 
-const acoes = vi.hoisted(() => ({ lida: vi.fn(), todas: vi.fn() }))
+const acoes = vi.hoisted(() => ({
+  lida: vi.fn(),
+  todas: vi.fn(),
+  limpar: vi.fn(),
+}))
 const navegacao = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }))
 
 vi.mock('next/navigation', () => ({
@@ -14,6 +18,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/app/(app)/notificacoes/actions', () => ({
   marcarComoLida: (id: string) => acoes.lida(id),
   marcarTodasComoLidas: () => acoes.todas(),
+  limparTodas: () => acoes.limpar(),
 }))
 
 // O canal do Realtime não sobe no jsdom; o teste cobre a lista inicial e as
@@ -46,6 +51,7 @@ function nota(sobrepor: Partial<Notificacao> = {}): Notificacao {
 beforeEach(() => {
   acoes.lida.mockResolvedValue({ ok: true })
   acoes.todas.mockResolvedValue({ ok: true })
+  acoes.limpar.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -218,5 +224,65 @@ describe('falha da ação', () => {
     ).toBeInTheDocument()
     // Contador volta a 2: a marcação otimista foi desfeita.
     expect(screen.getByText('2')).toBeInTheDocument()
+  })
+})
+
+describe('limpar todas', () => {
+  // Marcar como lida zera o contador mas deixa a linha; sem um limpar, o
+  // painel só crescia e não havia saída pela interface.
+  it('esvazia o painel e explica o vazio', async () => {
+    render(
+      <SinoNotificacoes
+        ownerId="user-1"
+        iniciais={[nota(), nota({ id: 'n2', titulo: 'Bruno respondeu' })]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Limpar todas/ }),
+    )
+
+    expect(acoes.limpar).toHaveBeenCalledOnce()
+    await waitFor(() => {
+      expect(screen.queryByText('Amanda respondeu')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText(/Nenhuma notificação por aqui/)).toBeInTheDocument()
+  })
+
+  // Sem nada no painel, o botão só ofereceria uma ação sem efeito.
+  it('não se oferece com o painel já vazio', async () => {
+    render(<SinoNotificacoes ownerId="user-1" iniciais={[]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+
+    // Espera o painel abrir antes de afirmar ausência, senão o teste passaria
+    // só porque o conteúdo ainda não montou.
+    expect(await screen.findByText(/Nenhuma notificação por aqui/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Limpar todas/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  // Some ainda que estejam todas lidas: o acúmulo é o problema, não o contador.
+  it('aparece mesmo com tudo já lido', async () => {
+    render(<SinoNotificacoes ownerId="user-1" iniciais={[nota({ lida: true })]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+
+    expect(
+      await screen.findByRole('button', { name: /Limpar todas/ }),
+    ).toBeInTheDocument()
+  })
+
+  // Falha devolve a lista: esconder o que continua no banco faria o usuário
+  // pensar que limpou, e a próxima navegação traria tudo de volta.
+  it('devolve as notificações quando a ação falha', async () => {
+    acoes.limpar.mockResolvedValue({ erro: 'Sessão expirada. Entre novamente.' })
+    render(<SinoNotificacoes ownerId="user-1" iniciais={[nota()]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Limpar todas/ }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Sessão expirada/)
+    expect(screen.getByText('Amanda respondeu')).toBeInTheDocument()
   })
 })

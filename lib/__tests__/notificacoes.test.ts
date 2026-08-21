@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { montarNotificacao, PREFERENCIA_POR_TIPO } from '@/lib/notificacoes'
+import {
+  chavesOrfas,
+  montarNotificacao,
+  PREFERENCIA_POR_TIPO,
+} from '@/lib/notificacoes'
 
 describe('montarNotificacao — mensagem', () => {
   it('agrupa pela forma canônica do número, sem o nono dígito', () => {
@@ -125,5 +129,69 @@ describe('PREFERENCIA_POR_TIPO', () => {
     expect(PREFERENCIA_POR_TIPO.mensagem).toBe('notificar_mensagem')
     expect(PREFERENCIA_POR_TIPO.disparo).toBe('notificar_disparo')
     expect(PREFERENCIA_POR_TIPO.conexao).toBe('notificar_conexao')
+  })
+})
+
+describe('chavesOrfas', () => {
+  // Remover a conexão faz o cascade da 0011 levar as mensagens dela junto. As
+  // notificações não têm FK para instances e sobreviviam, apontando para uma
+  // conversa que não existe mais — foi o que deixou "Matheus respondeu" no
+  // sino sem card correspondente na tela de Mensagens.
+  it('leva a notificação da conversa que saiu junto com a conexão', () => {
+    expect(
+      chavesOrfas({
+        instanceId: 'inst-1',
+        numerosDaConexao: ['5565984038479'],
+        numerosRemanescentes: [],
+      }),
+    ).toEqual(['conexao:inst-1', 'mensagem:556584038479'])
+  })
+
+  // A queda da própria conexão removida também não tem mais para onde levar.
+  it('leva a notificação de queda da conexão removida', () => {
+    expect(
+      chavesOrfas({
+        instanceId: 'inst-1',
+        numerosDaConexao: [],
+        numerosRemanescentes: [],
+      }),
+    ).toEqual(['conexao:inst-1'])
+  })
+
+  // Com duas conexões, o mesmo contato pode ter conversa nas duas: o cascade
+  // só apagou as mensagens de uma, a conversa continua na tela, e apagar a
+  // notificação dela seria perder aviso de conversa viva.
+  it('preserva a conversa que ainda tem mensagem em outra conexão', () => {
+    expect(
+      chavesOrfas({
+        instanceId: 'inst-1',
+        numerosDaConexao: ['5565984038479', '5511999998888'],
+        numerosRemanescentes: ['5511999998888'],
+      }),
+    ).toEqual(['conexao:inst-1', 'mensagem:556584038479'])
+  })
+
+  // O que sobrou pode estar gravado com o nono dígito e o que saiu sem ele:
+  // comparar cru acharia que a conversa sumiu e apagaria aviso de conversa viva.
+  it('compara pela forma canônica dos dois lados', () => {
+    expect(
+      chavesOrfas({
+        instanceId: 'inst-1',
+        numerosDaConexao: ['556584038479'],
+        numerosRemanescentes: ['5565984038479'],
+      }),
+    ).toEqual(['conexao:inst-1'])
+  })
+
+  // Vários registros do mesmo contato não podem virar a mesma chave repetida
+  // no `in.()` da limpeza.
+  it('não repete chave quando o contato tem várias mensagens', () => {
+    expect(
+      chavesOrfas({
+        instanceId: 'inst-1',
+        numerosDaConexao: ['5565984038479', '556584038479'],
+        numerosRemanescentes: [],
+      }),
+    ).toEqual(['conexao:inst-1', 'mensagem:556584038479'])
   })
 })

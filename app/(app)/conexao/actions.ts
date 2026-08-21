@@ -14,6 +14,7 @@ import {
   removerInstancia,
 } from '@/lib/evolution/instances'
 import { LIMITE_NOME_CONEXAO, type StatusConexao } from '@/lib/conexoes'
+import { chavesOrfas } from '@/lib/notificacoes'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
 export type EstadoConexaoUi = {
@@ -264,6 +265,43 @@ export async function verificarConexao(id: string): Promise<EstadoConexaoUi> {
   return { ok: true, status, numero }
 }
 
+/**
+ * Apaga as notificações que ficaram sem objeto depois do cascade.
+ *
+ * Falha aqui não desfaz a remoção: a conexão já saiu, e devolver erro faria o
+ * usuário tentar de novo uma remoção que já aconteceu. O pior caso é sobrar a
+ * notificação órfã que existia antes desta função.
+ */
+async function limparNotificacoesOrfas(
+  supabase: Awaited<ReturnType<typeof criarClienteServidor>>,
+  ownerId: string,
+  instanceId: string,
+  numerosDaConexao: string[],
+) {
+  // Depois do cascade: o que sobrou é conversa que ainda vive em outra
+  // conexão, e cuja notificação continua tendo para onde levar.
+  const { data: restantes } = await supabase
+    .from('mensagens')
+    .select('numero')
+    .eq('owner_id', ownerId)
+
+  const chaves = chavesOrfas({
+    instanceId,
+    numerosDaConexao,
+    numerosRemanescentes: (restantes ?? []).map((linha) => String(linha.numero)),
+  })
+
+  const { error } = await supabase
+    .from('notificacoes')
+    .delete()
+    .eq('owner_id', ownerId)
+    .in('chave', chaves)
+
+  if (error) {
+    console.error('[conexao] notificações órfãs ficaram:', error.code, error.message)
+  }
+}
+
 /** Desconecta e apaga a conexão, na Evolution e no banco. */
 export async function removerConexao(id: string): Promise<EstadoConexaoUi> {
   const { supabase, user } = await usuarioAtual()
@@ -285,6 +323,14 @@ export async function removerConexao(id: string): Promise<EstadoConexaoUi> {
     console.error('[conexao] instância órfã na Evolution:', erro)
   }
 
+  // Lido antes do delete: o cascade da 0011 leva estas mensagens junto, e
+  // depois não haveria como saber de quais conversas eram.
+  const { data: antes } = await supabase
+    .from('mensagens')
+    .select('numero')
+    .eq('instance_id', conexao.id)
+    .eq('owner_id', user.id)
+
   const { error } = await supabase
     .from('instances')
     .delete()
@@ -293,7 +339,16 @@ export async function removerConexao(id: string): Promise<EstadoConexaoUi> {
 
   if (error) return { erro: 'Não foi possível remover a conexão.' }
 
-  revalidatePath('/conexao')
+  await limparNotificacoesOrfas(
+    supabase,
+    user.id,
+    String(conexao.id),
+    (antes ?? []).map((linha) => String(linha.numero)),
+  )
+
+  // '/', 'layout' e não só '/conexao': o sino vive no layout e acabou de
+  // perder notificações, então a topbar precisa ser refeita também.
+  revalidatePath('/', 'layout')
 
   // A linha sai de qualquer jeito — deixar um registro que o usuário não
   // consegue apagar seria pior —, mas ele precisa saber que sobrou lixo.

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, CheckCheck, MessageCircle, Send, Wifi } from 'lucide-react'
+import { Bell, CheckCheck, MessageCircle, Send, Trash2, Wifi } from 'lucide-react'
 import {
+  limparTodas,
   marcarComoLida,
   marcarTodasComoLidas,
 } from '@/app/(app)/notificacoes/actions'
@@ -67,15 +68,21 @@ export function SinoNotificacoes({
   // Derivar em vez de copiar com useEffect é proposital: `iniciais` chega como
   // array novo a cada render, e sincronizar por efeito entraria em laço.
   const [lidasAgora, setLidasAgora] = useState<string[]>([])
+  // Mesma chave composta de `lidasAgora`, pelo mesmo motivo: se a conversa
+  // gerar atividade nova, o upsert muda `quando`, a chave deixa de casar e a
+  // notificação reaparece sozinha — limpar não silencia ninguém para sempre.
+  const [limpasAgora, setLimpasAgora] = useState<string[]>([])
   const [erro, setErro] = useState('')
 
   function chaveLeitura(n: Notificacao): string {
     return `${n.id}:${n.quando}`
   }
 
-  const lista = iniciais.map((n) =>
-    lidasAgora.includes(chaveLeitura(n)) ? { ...n, lida: true } : n,
-  )
+  const lista = iniciais
+    .filter((n) => !limpasAgora.includes(chaveLeitura(n)))
+    .map((n) =>
+      lidasAgora.includes(chaveLeitura(n)) ? { ...n, lida: true } : n,
+    )
 
   // Realtime: o canal entrega a linha nova sem recarregar. Os eventos de uma
   // rajada (até 300 num disparo grande) são juntados num só refresh, por aba
@@ -154,6 +161,20 @@ export function SinoNotificacoes({
     }
   }
 
+  async function limparTudo() {
+    setErro('')
+    const antesDaTentativa = limpasAgora
+    setLimpasAgora(iniciais.map((n) => chaveLeitura(n)))
+    const resultado = await limparTodas()
+
+    if (resultado.erro) {
+      // Devolve a lista: esconder o que continua no banco faria o usuário
+      // pensar que limpou, e a próxima navegação traria tudo de volta.
+      setLimpasAgora(antesDaTentativa)
+      setErro(resultado.erro)
+    }
+  }
+
   return (
     <DropdownMenu>
       {/* Sem render de Button: o gatilho já renderiza um <button>, e passar
@@ -173,17 +194,34 @@ export function SinoNotificacoes({
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-sm font-medium text-foreground">Notificações</span>
-          {naoLidas > 0 && (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="gap-1.5 text-xs"
-              onClick={lerTodas}
-            >
-              <CheckCheck className="size-3.5" />
-              Marcar todas como lidas
-            </Button>
-          )}
+          {/* Limpar acompanha a lista, não o contador: o acúmulo incomoda
+              mesmo depois de tudo lido. Ícone só, com aria-label, para os dois
+              caberem no cabeçalho de 320px sem quebrar linha. */}
+          <span className="flex items-center gap-0.5">
+            {naoLidas > 0 && (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="gap-1.5 text-xs"
+                onClick={lerTodas}
+              >
+                <CheckCheck className="size-3.5" />
+                Marcar todas como lidas
+              </Button>
+            )}
+            {lista.length > 0 && (
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-label="Limpar todas as notificações"
+                title="Limpar todas"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={limparTudo}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
+          </span>
         </div>
 
         {erro && (

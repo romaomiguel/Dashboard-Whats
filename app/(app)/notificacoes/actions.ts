@@ -47,3 +47,26 @@ export async function marcarTodasComoLidas(): Promise<EstadoNotificacao> {
   revalidatePath('/', 'layout')
   return { ok: true }
 }
+
+/**
+ * Esvazia o painel.
+ *
+ * Marcar como lida zera o contador mas deixa a linha no lugar, então o painel
+ * só crescia — a retenção de 30 dias do registrador é longa demais para servir
+ * de saída. Apaga em vez de esconder: uma coluna "arquivada" guardaria para
+ * sempre algo que ninguém vai reler.
+ */
+export async function limparTodas(): Promise<EstadoNotificacao> {
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  const { error } = await supabase
+    .from('notificacoes')
+    .delete()
+    .eq('owner_id', user.id)
+
+  if (error) return { erro: 'Não foi possível limpar as notificações.' }
+
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}
