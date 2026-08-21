@@ -21,6 +21,7 @@ export function Quadro({
   const router = useRouter()
   const [erro, setErro] = useState('')
   const [nomeNovaEtapa, setNomeNovaEtapa] = useState('')
+  const [criandoEtapa, setCriandoEtapa] = useState(false)
   const [criandoFunil, setCriandoFunil] = useState(false)
   // Etapa esperando o segundo clique. Sem `confirm()`/modal (quebra em
   // teste e em automação): a confirmação vira estado do próprio componente.
@@ -28,6 +29,9 @@ export function Quadro({
 
   async function mover(contatoId: string, valor: string) {
     setErro('')
+    // Mover para outra tela do quadro não pode deixar uma remoção armada
+    // esperando um clique perdido tempos depois.
+    setParaRemover(null)
     const resultado = await moverContato(contatoId, valor === '' ? null : valor)
     if (resultado.erro) {
       setErro(resultado.erro)
@@ -38,22 +42,34 @@ export function Quadro({
 
   async function adicionarEtapa() {
     const limpo = nomeNovaEtapa.trim()
-    if (!limpo) return // nome vazio ou só espaço não vai para o servidor
+    // Sem guarda, um duplo clique manda `criarEtapa` duas vezes: a segunda
+    // bate no nome já criado pela primeira e pinta erro de duplicidade sobre
+    // uma criação que na verdade funcionou.
+    if (!limpo || criandoEtapa) return
 
     setErro('')
-    const resultado = await criarEtapa(limpo)
-    if (resultado.erro) {
-      setErro(resultado.erro)
-      return
+    setParaRemover(null)
+    setCriandoEtapa(true)
+    try {
+      const resultado = await criarEtapa(limpo)
+      if (resultado.erro) {
+        setErro(resultado.erro)
+        return
+      }
+      setNomeNovaEtapa('')
+      router.refresh()
+    } finally {
+      setCriandoEtapa(false)
     }
-    setNomeNovaEtapa('')
-    router.refresh()
   }
 
   /**
    * Cria as quatro etapas padrão em ordem, uma de cada vez: são poucas e a
    * ordem final (usada em `proximaOrdem`) depende da ordem de inserção. Para
-   * na primeira que falhar, para não deixar o funil pela metade sem avisar.
+   * na primeira que falhar, mas atualiza a tela mesmo assim: as etapas
+   * anteriores já foram gravadas, e sem o refresh o quadro continua mostrando
+   * o estado vazio, escondendo o progresso e levando a pessoa a tentar de
+   * novo pela etapa que já existe (erro de nome duplicado).
    */
   async function criarFunilPadrao() {
     setErro('')
@@ -63,6 +79,7 @@ export function Quadro({
         const resultado = await criarEtapa(nome)
         if (resultado.erro) {
           setErro(resultado.erro)
+          router.refresh()
           return
         }
       }
@@ -102,9 +119,10 @@ export function Quadro({
           maxLength={LIMITE_NOME_ETAPA}
           placeholder="Ex.: Proposta enviada"
           className="w-56"
+          disabled={criandoEtapa}
         />
       </div>
-      <Button type="button" size="sm" onClick={adicionarEtapa}>
+      <Button type="button" size="sm" disabled={criandoEtapa} onClick={adicionarEtapa}>
         Adicionar etapa
       </Button>
     </div>
@@ -160,24 +178,27 @@ export function Quadro({
               className="flex w-64 shrink-0 flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-foreground">
-                  {coluna.nome}
-                  {/* aria-hidden: a contagem é decoração visual, não parte do
-                      nome acessível do cabeçalho (que precisa ser só o nome
-                      da etapa, para bater com o aria-label da seção). */}
-                  <span
-                    aria-hidden="true"
-                    className="ml-1.5 text-xs font-normal text-muted-foreground"
-                  >
+                {/* O contador fica fora do <h2>: dentro dele, entraria na
+                    computação do nome acessível do cabeçalho ("Novo 1" em vez
+                    de "Novo") e sumiria de leitor de tela ao virar
+                    aria-hidden. Aqui do lado ele continua lido normalmente. */}
+                <div className="flex items-baseline gap-1.5">
+                  <h2 className="text-sm font-semibold text-foreground">{coluna.nome}</h2>
+                  <span className="text-xs font-normal text-muted-foreground">
                     {daColuna.length}
                   </span>
-                </h2>
+                </div>
 
                 {/* "Sem etapa" não é uma etapa de verdade: nada para remover. */}
                 {coluna.id && (
                   <button
                     type="button"
                     onClick={() => removerColuna(coluna.id as string)}
+                    aria-label={
+                      paraRemover === coluna.id
+                        ? `Confirmar remoção da etapa ${coluna.nome}?`
+                        : `Remover etapa ${coluna.nome}`
+                    }
                     className="text-xs text-muted-foreground hover:text-destructive"
                   >
                     {paraRemover === coluna.id ? 'Confirmar remoção?' : 'Remover'}

@@ -127,6 +127,29 @@ describe('quadro', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/etapa com esse nome/i)
   })
 
+  // Sem essa guarda, o segundo clique bate no nome que o primeiro acabou de
+  // criar e pinta "etapa com esse nome" sobre uma criação que funcionou.
+  it('não duplica a criação com um segundo clique enquanto a primeira ainda está em voo', async () => {
+    let resolverCriacao: (v: { ok: boolean }) => void = () => {}
+    acoes.criar.mockImplementation(
+      () => new Promise((resolve) => { resolverCriacao = resolve }),
+    )
+
+    render(<Quadro etapas={etapas} contatos={contatos} />)
+    await userEvent.type(screen.getByLabelText(/Nome da nova etapa/), 'Proposta')
+
+    const botao = screen.getByRole('button', { name: /Adicionar etapa/ })
+    await userEvent.click(botao) // dispara a criação; a promise ainda não resolveu
+
+    expect(botao).toBeDisabled()
+    await userEvent.click(botao) // não deve nem chegar ao handler
+
+    resolverCriacao({ ok: true })
+    await waitFor(() => expect(botao).not.toBeDisabled())
+
+    expect(acoes.criar).toHaveBeenCalledTimes(1)
+  })
+
   // --- "Criar funil padrão" no vazio ---
 
   it('cria o funil padrão em ordem a partir do quadro vazio', async () => {
@@ -151,7 +174,23 @@ describe('quadro', () => {
 
     await waitFor(() => expect(acoes.criar).toHaveBeenCalledTimes(2))
     expect(await screen.findByRole('alert')).toHaveTextContent(/etapa com esse nome/i)
-    expect(navegacao.refresh).not.toHaveBeenCalled()
+  })
+
+  // As duas primeiras etapas já foram gravadas antes da falha na terceira:
+  // sem o refresh aqui, o quadro continua mostrando o estado vazio e some o
+  // progresso já feito, levando a pessoa a tentar de novo e bater na mesma
+  // etapa duplicada.
+  it('atualiza a tela mesmo quando o funil padrão para por erro no meio', async () => {
+    acoes.criar
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ erro: 'Você já tem uma etapa com esse nome.' })
+
+    render(<Quadro etapas={[]} contatos={[]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Criar funil padrão/ }))
+
+    await waitFor(() => expect(acoes.criar).toHaveBeenCalledTimes(2))
+    await screen.findByRole('alert')
+    expect(navegacao.refresh).toHaveBeenCalled()
   })
 
   // --- Remover etapa, sem modal do navegador ---
@@ -186,5 +225,44 @@ describe('quadro', () => {
     render(<Quadro etapas={etapas} contatos={contatos} />)
     const coluna = screen.getByRole('region', { name: /Sem etapa/ })
     expect(within(coluna).queryByRole('button', { name: /Remover/ })).not.toBeInTheDocument()
+  })
+
+  // Com N etapas, "Remover" sozinho não diz qual: quem usa leitor de tela ou
+  // comando de voz não sabe em qual botão está. O nome acessível carrega a
+  // etapa nos dois estados (neutro e armado).
+  it('nomeia o controle de remover com a etapa, nos dois estados', async () => {
+    render(<Quadro etapas={etapas} contatos={contatos} />)
+    const coluna = screen.getByRole('region', { name: 'Novo' })
+
+    const botao = within(coluna).getByRole('button', { name: 'Remover etapa Novo' })
+    await userEvent.click(botao)
+
+    expect(
+      within(coluna).getByRole('button', { name: 'Confirmar remoção da etapa Novo?' }),
+    ).toBeInTheDocument()
+  })
+
+  it('desarma a remoção pendente ao mover um contato', async () => {
+    render(<Quadro etapas={etapas} contatos={contatos} />)
+    const coluna = screen.getByRole('region', { name: 'Novo' })
+
+    await userEvent.click(within(coluna).getByRole('button', { name: 'Remover etapa Novo' }))
+    await userEvent.selectOptions(screen.getByLabelText(/Etapa de Matheus/), 'e2')
+
+    // De volta ao neutro: um clique só arma de novo, não remove de primeira.
+    await userEvent.click(within(coluna).getByRole('button', { name: 'Remover etapa Novo' }))
+    expect(acoes.remover).not.toHaveBeenCalled()
+  })
+
+  it('desarma a remoção pendente ao criar uma nova etapa', async () => {
+    render(<Quadro etapas={etapas} contatos={contatos} />)
+    const coluna = screen.getByRole('region', { name: 'Novo' })
+
+    await userEvent.click(within(coluna).getByRole('button', { name: 'Remover etapa Novo' }))
+    await userEvent.type(screen.getByLabelText(/Nome da nova etapa/), 'Proposta')
+    await userEvent.click(screen.getByRole('button', { name: /Adicionar etapa/ }))
+
+    await userEvent.click(within(coluna).getByRole('button', { name: 'Remover etapa Novo' }))
+    expect(acoes.remover).not.toHaveBeenCalled()
   })
 })
