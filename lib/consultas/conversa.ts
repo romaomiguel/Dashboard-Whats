@@ -20,6 +20,17 @@ export function ordenarCronologico<T extends { quando: string }>(linhas: T[]): T
 const LIMITE_THREAD = 200
 
 /**
+ * Teto de linhas recentes varridas para achar as de uma conversa.
+ *
+ * Exportado porque o envio (app/(app)/mensagens/actions.ts) varre a mesma
+ * tabela para descobrir por qual conexão responder: se ele varresse menos que
+ * a leitura, existiria conversa que a tela renderiza mas o botão Enviar
+ * recusa — e a pessoa veria um erro pedindo justamente o que ela acabou de
+ * fazer. Um valor só para os dois lados torna esse descompasso impossível.
+ */
+export const LIMITE_VARREDURA_CONVERSA = 1000
+
+/**
  * Histórico de uma conversa só.
  *
  * O filtro por número acontece em memória, não no Postgres: as linhas da
@@ -35,7 +46,7 @@ export async function listarMensagensDaConversa(
     .from('mensagens')
     .select('id, numero, nome, direcao, status, texto, erro, criado_em')
     .order('criado_em', { ascending: false })
-    .limit(1000)
+    .limit(LIMITE_VARREDURA_CONVERSA)
 
   if (error || !data) return []
 

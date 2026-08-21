@@ -163,6 +163,15 @@ export function Quadro({
     { id: null, nome: SEM_ETAPA },
   ]
 
+  // `listarEsteira` lê etapas e contatos em dois selects independentes: entre
+  // as duas leituras uma outra aba pode criar uma etapa e mover um contato
+  // para ela, e o contato chega aqui apontando para uma etapa que não está na
+  // lista. Sem esta rede, ele não casava com coluna nenhuma e simplesmente
+  // sumia da tela — o pior desfecho possível para um funil de vendas.
+  const idsConhecidos = new Set(etapas.map((e) => e.id))
+  const etapaVisivel = (etapaId: string | null) =>
+    etapaId && idsConhecidos.has(etapaId) ? etapaId : null
+
   return (
     <div className="flex flex-col gap-3">
       {regiaoErro}
@@ -170,7 +179,7 @@ export function Quadro({
 
       <div className="flex gap-3 overflow-x-auto pb-2">
         {colunas.map((coluna) => {
-          const daColuna = contatos.filter((c) => c.etapaId === coluna.id)
+          const daColuna = contatos.filter((c) => etapaVisivel(c.etapaId) === coluna.id)
           return (
             <section
               key={coluna.id ?? 'sem-etapa'}
@@ -218,7 +227,9 @@ export function Quadro({
                       acessível por teclado e não precisa de biblioteca. */}
                   <select
                     aria-label={`Etapa de ${c.nome}`}
-                    value={c.etapaId ?? ''}
+                    // Mesma rede da coluna: um id fora das options deixaria o
+                    // select em branco e fora do controle do React.
+                    value={etapaVisivel(c.etapaId) ?? ''}
                     onChange={(e) => mover(c.id, e.target.value)}
                     className="rounded border border-border bg-background px-1.5 py-1 text-xs"
                   >

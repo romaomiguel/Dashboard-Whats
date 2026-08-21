@@ -47,6 +47,27 @@ describe('quadro', () => {
     expect(within(coluna).getByText('Ana')).toBeInTheDocument()
   })
 
+  // `listarEsteira` lê etapas e contatos em selects independentes: outra aba
+  // criando uma etapa e movendo um contato entre as duas leituras entrega um
+  // contato apontando para etapa que não está na lista. Antes ele não casava
+  // com coluna nenhuma e sumia da tela.
+  it('mostra o contato de etapa desconhecida em vez de sumir com ele', () => {
+    const desgarrado = {
+      id: 'c3',
+      nome: 'Carla',
+      numero: '5511977776666',
+      etapaId: 'etapa-que-nao-veio-na-leitura',
+    }
+    render(<Quadro etapas={etapas} contatos={[...contatos, desgarrado]} />)
+
+    const coluna = screen.getByRole('region', { name: /Sem etapa/ })
+    expect(within(coluna).getByText('Carla')).toBeInTheDocument()
+    // E em nenhuma das colunas de etapa de verdade.
+    expect(
+      within(screen.getByRole('region', { name: 'Novo' })).queryByText('Carla'),
+    ).not.toBeInTheDocument()
+  })
+
   it('põe cada contato na coluna da etapa dele', () => {
     render(<Quadro etapas={etapas} contatos={contatos} />)
     const coluna = screen.getByRole('region', { name: 'Novo' })

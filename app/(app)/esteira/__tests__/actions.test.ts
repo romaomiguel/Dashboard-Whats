@@ -38,9 +38,24 @@ vi.mock('@/lib/supabase/server', () => ({
           estado.inserts.push({ tabela, ...valores })
           return { error: null }
         },
+        // Mesmo encadeamento do delete abaixo: registra cada `.eq()` no
+        // mesmo objeto. O `{ eq: () => ({ eq: async () => ... }) }` de antes
+        // não gravava coluna nenhuma e ainda terminava a cadeia num objeto
+        // não-thenable — tirar `.eq('owner_id')` do UPDATE devolvia `error`
+        // indefinido e o teste passava, liberando um UPDATE sem dono.
         update: (valores: Record<string, unknown>) => {
-          estado.updates.push({ tabela, ...valores })
-          return { eq: () => ({ eq: async () => ({ error: null }) }) }
+          const registro: Record<string, unknown> = { tabela, ...valores }
+          const cadeia = {
+            eq: (coluna: string, valor: unknown) => {
+              registro[coluna] = valor
+              return cadeia
+            },
+            then: (r: (v: { data: null; error: unknown }) => void) => {
+              estado.updates.push(registro)
+              return r({ data: null, error: null })
+            },
+          }
+          return cadeia
         },
         // Encadeamento próprio para o delete: registra cada `.eq()` no
         // mesmo objeto, para provar que a remoção filtra por id **e** por
@@ -138,6 +153,20 @@ describe('moverContato', () => {
       tabela: 'contato_etapa_historico',
       contato_id: 'c1',
       de: 'Novo',
+    })
+  })
+
+  // Só o id não bastaria: sem o owner_id no filtro, um id de contato
+  // adivinhado de outro usuário seria movido junto — a RLS é o backstop, não
+  // o único controle.
+  it('atualiza filtrando por id e por dono, não só pelo id', async () => {
+    const r = await moverContato('c1', 'e2')
+
+    expect(r).toEqual({ ok: true })
+    expect(estado.updates.at(-1)).toMatchObject({
+      tabela: 'contatos',
+      id: 'c1',
+      owner_id: 'user-1',
     })
   })
 
