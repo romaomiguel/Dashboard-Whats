@@ -77,6 +77,14 @@ describe('Mensagens', () => {
     await comExemploDesligado(<ListaConversas conversas={[]} />)
     expect(screen.getByText('Nenhuma conversa')).toBeInTheDocument()
   })
+
+  // Os números de exemplo são fictícios: virar link abriria uma thread vazia
+  // parecendo quebrada, então a linha de exemplo não pode ser clicável.
+  it('a linha de exemplo não é um link', async () => {
+    montar(<ListaConversas conversas={[]} />)
+    await screen.findByText('Lívia Torri')
+    expect(screen.queryByRole('link', { name: /Lívia Torri/ })).not.toBeInTheDocument()
+  })
 })
 
 describe('Contatos', () => {
@@ -293,6 +301,14 @@ describe('conversas reais', () => {
     montar(<ListaConversas conversas={[{ ...base, estado: 'enviada' as const }]} />)
     await screen.findByText('Joana Prado')
     expect(screen.queryByText('Lívia Torri')).not.toBeInTheDocument()
+  })
+
+  // A linha de uma conversa real leva à tela da conversa — sem isto, abrir a
+  // thread a partir da lista fica quebrado silenciosamente.
+  it('a linha da conversa é um link para a thread', async () => {
+    montar(<ListaConversas conversas={[{ ...base, estado: 'enviada' as const }]} />)
+    const link = await screen.findByRole('link', { name: /Joana Prado/ })
+    expect(link).toHaveAttribute('href', '/mensagens/5565984627628')
   })
 })
 

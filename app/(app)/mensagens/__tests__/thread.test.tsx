@@ -105,4 +105,21 @@ describe('thread', () => {
     )
     expect(screen.getByText(/Não entregue/)).toBeInTheDocument()
   })
+
+  // Falha de transporte da server action (offline, 500, requisição abortada)
+  // rejeita a promise em vez de resolver com `{ erro }`. Sem o catch, o botão
+  // ficava desabilitado para sempre e não aparecia nenhum aviso.
+  it('avisa e reabilita o botão quando o envio rejeita a promise', async () => {
+    acoes.enviar.mockRejectedValue(new Error('falha de rede'))
+    render(<Thread numero="556584038479" nome="Matheus" iniciais={[]} />)
+
+    const caixa = screen.getByRole('textbox', { name: /Mensagem/ })
+    const botao = screen.getByRole('button', { name: /Enviar/ })
+    await userEvent.type(caixa, 'Bom dia')
+    await userEvent.click(botao)
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(caixa).toHaveValue('Bom dia')
+    await waitFor(() => expect(botao).not.toBeDisabled())
+  })
 })

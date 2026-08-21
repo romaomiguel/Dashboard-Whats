@@ -61,18 +61,28 @@ export function Thread({
 
     setErro('')
     setEnviando(true)
-    const resultado = await enviarMensagem(numero, limpo)
-    setEnviando(false)
+    try {
+      // `enviarMensagem` devolve `{ erro }` para falha de negócio (sem
+      // conexão, texto vazio etc.), mas uma falha de transporte da server
+      // action (offline, 500, requisição abortada) rejeita a promise em vez
+      // de resolver — sem o catch, o botão ficava desabilitado para sempre e
+      // a pessoa não via nenhum aviso.
+      const resultado = await enviarMensagem(numero, limpo)
 
-    if (resultado.erro) {
-      // O texto fica: perder o que a pessoa escreveu por causa de uma falha
-      // de rede é pior que repetir o erro na tela.
-      setErro(resultado.erro)
-      return
+      if (resultado.erro) {
+        // O texto fica: perder o que a pessoa escreveu por causa de uma falha
+        // de rede é pior que repetir o erro na tela.
+        setErro(resultado.erro)
+        return
+      }
+
+      setTexto('')
+      router.refresh()
+    } catch {
+      setErro('Não foi possível enviar a mensagem. Tente novamente.')
+    } finally {
+      setEnviando(false)
     }
-
-    setTexto('')
-    router.refresh()
   }
 
   return (
