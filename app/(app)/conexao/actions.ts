@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { descobrirUrlDoApp } from '@/lib/app-url'
+import { descobrirUrlDoApp, ehEnderecoAlcancavel } from '@/lib/app-url'
 import { chamar, TIMEOUT_ACORDAR_MS } from '@/lib/evolution/client'
 import { endpoints } from '@/lib/evolution/endpoints'
 import { EvolutionError } from '@/lib/evolution/errors'
@@ -80,6 +80,17 @@ function urlDoWebhook(): string {
   }
   if (!segredo) {
     throw new EvolutionError('configuracao', 'WEBHOOK_SECRET')
+  }
+
+  // Quem chama o webhook é a Evolution, de outra máquina. Endereço local
+  // grava uma conexão que envia mas nunca recebe, e sem nenhum erro na tela —
+  // o sintoma seria só "a resposta do contato não aparece". Recusar aqui
+  // troca essa falha invisível por uma mensagem no ato da criação.
+  if (!ehEnderecoAlcancavel(base)) {
+    throw new EvolutionError(
+      'configuracao',
+      `um endereço que a Evolution alcance: ${base} só existe dentro da sua máquina. Publique o app, ou exponha esta porta e aponte APP_URL para o endereço público`,
+    )
   }
 
   return `${base}/api/webhooks/evolution/${segredo}`

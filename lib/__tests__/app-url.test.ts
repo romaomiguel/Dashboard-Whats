@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { descobrirUrlDoApp } from '@/lib/app-url'
+import { descobrirUrlDoApp, ehEnderecoAlcancavel } from '@/lib/app-url'
 
 describe('descobrirUrlDoApp', () => {
   it('APP_URL tem a palavra final', () => {
@@ -49,5 +49,52 @@ describe('descobrirUrlDoApp', () => {
   // seguia adiante produzindo "/api/webhooks/...".
   it('sem nada definido, devolve null para quem chama poder falhar alto', () => {
     expect(descobrirUrlDoApp({})).toBeNull()
+  })
+})
+
+describe('ehEnderecoAlcancavel', () => {
+  // O webhook é chamado DE FORA: quem precisa alcançar o endereço é a
+  // Evolution, hospedada em outra máquina, não o navegador do usuário.
+  it('aceita domínio público', () => {
+    expect(ehEnderecoAlcancavel('https://dashboard-whats-mu.vercel.app')).toBe(true)
+    expect(ehEnderecoAlcancavel('https://meu.app')).toBe(true)
+  })
+
+  // Para a Evolution, localhost é ela mesma — o webhook cai no próprio
+  // contêiner dela e nunca chega ao app.
+  it('recusa localhost em todas as formas', () => {
+    expect(ehEnderecoAlcancavel('http://localhost:3000')).toBe(false)
+    expect(ehEnderecoAlcancavel('http://127.0.0.1:3000')).toBe(false)
+    expect(ehEnderecoAlcancavel('http://[::1]:3000')).toBe(false)
+    expect(ehEnderecoAlcancavel('http://0.0.0.0:3000')).toBe(false)
+  })
+
+  it('recusa faixa privada, que não se alcança pela internet', () => {
+    expect(ehEnderecoAlcancavel('http://192.168.0.10:3000')).toBe(false)
+    expect(ehEnderecoAlcancavel('http://10.1.2.3:3000')).toBe(false)
+    expect(ehEnderecoAlcancavel('http://172.16.5.4:3000')).toBe(false)
+    expect(ehEnderecoAlcancavel('http://169.254.1.1:3000')).toBe(false)
+  })
+
+  // 172.32 está FORA da faixa privada (que vai até 172.31): recusar por
+  // prefixo "172." pegaria endereço público legítimo.
+  it('não confunde 172 público com a faixa privada', () => {
+    expect(ehEnderecoAlcancavel('http://172.32.0.1:3000')).toBe(true)
+    expect(ehEnderecoAlcancavel('http://172.15.0.1:3000')).toBe(true)
+  })
+
+  // IP público direto serve: é o caso de quem expõe a máquina de dev.
+  it('aceita IP público', () => {
+    expect(ehEnderecoAlcancavel('http://54.232.189.113:3000')).toBe(true)
+  })
+
+  // .local é resolvido por mDNS, só dentro da rede.
+  it('recusa domínio .local', () => {
+    expect(ehEnderecoAlcancavel('http://meu-pc.local:3000')).toBe(false)
+  })
+
+  it('recusa o que nem é URL', () => {
+    expect(ehEnderecoAlcancavel('não é url')).toBe(false)
+    expect(ehEnderecoAlcancavel('')).toBe(false)
   })
 })

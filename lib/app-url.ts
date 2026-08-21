@@ -42,3 +42,43 @@ export function descobrirUrlDoApp(ambiente: AmbienteUrl): string | null {
 
   return null
 }
+
+/** Faixas IPv4 que não se alcançam pela internet pública. */
+function ehIpPrivado(host: string): boolean {
+  const partes = host.split('.').map(Number)
+  if (partes.length !== 4 || partes.some((n) => !Number.isInteger(n))) return false
+
+  const [a, b] = partes
+  if (a === 10 || a === 127 || a === 0) return true
+  if (a === 169 && b === 254) return true
+  if (a === 192 && b === 168) return true
+  // 172.16 a 172.31 — e não "172." inteiro, que pegaria endereço público.
+  if (a === 172 && b >= 16 && b <= 31) return true
+  return false
+}
+
+/**
+ * Se a Evolution consegue alcançar este endereço.
+ *
+ * Quem chama o webhook é ela, de outra máquina — não o navegador do usuário.
+ * Registrar `http://localhost:3000` grava um endereço que, do contêiner dela,
+ * aponta para ela mesma: o envio segue funcionando (app → Evolution) e o
+ * recebimento nunca acontece, sem erro em lugar nenhum. Falha invisível, e é
+ * por isso que a criação de conexão passa a recusar antes de gravar.
+ */
+export function ehEnderecoAlcancavel(url: string): boolean {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+
+  if (!host) return false
+  if (host === 'localhost' || host.endsWith('.localhost')) return false
+  // IPv6 chega entre colchetes; ::1 é o loopback.
+  if (host === '[::1]' || host === '::1') return false
+  if (host.endsWith('.local')) return false
+
+  return !ehIpPrivado(host)
+}
