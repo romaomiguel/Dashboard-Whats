@@ -175,5 +175,46 @@ describe('POST /api/webhooks/evolution/[segredo]', () => {
       await expect(resposta.json()).resolves.toEqual({ ok: true })
       expect(registrarNotificacaoMock).not.toHaveBeenCalled()
     })
+
+    // A queda é gravada; sem a volta também ser gravada aqui, o banco segue
+    // dizendo "desconectada" para sempre depois de uma reconexão automática, e
+    // a PRÓXIMA queda de verdade deixa de notificar (deveNotificarQueda exige
+    // estado anterior "conectada").
+    it('estado aberto vindo de desconectada grava conectada e não notifica', async () => {
+      banco.instancia = {
+        id: 'inst-1',
+        owner_id: 'user-1',
+        nome: 'Comercial',
+        status: 'desconectada',
+      }
+
+      const resposta = await POST(requisicao(evento), {
+        params: Promise.resolve({ segredo: 'segredo-certo' }),
+      })
+
+      expect(resposta.status).toBe(200)
+      expect(banco.atualizacoesInstancia).toEqual([
+        expect.objectContaining({ status: 'conectada' }),
+      ])
+      // Reconectar é boa notícia, não alerta.
+      expect(registrarNotificacaoMock).not.toHaveBeenCalled()
+    })
+
+    it('estado aberto vindo de já conectada não grava de novo', async () => {
+      banco.instancia = {
+        id: 'inst-1',
+        owner_id: 'user-1',
+        nome: 'Comercial',
+        status: 'conectada',
+      }
+
+      const resposta = await POST(requisicao(evento), {
+        params: Promise.resolve({ segredo: 'segredo-certo' }),
+      })
+
+      expect(resposta.status).toBe(200)
+      expect(banco.atualizacoesInstancia).toHaveLength(0)
+      expect(registrarNotificacaoMock).not.toHaveBeenCalled()
+    })
   })
 })

@@ -147,8 +147,18 @@ async function registrarRecebida(evento: EventoWebhook) {
   }
 }
 
-/** Avisa quando uma conexão que estava no ar cai. */
-async function registrarQueda(evento: EventoWebhook) {
+/**
+ * Mantém `instances.status` sincronizado com o que a Evolution reporta, nas
+ * duas direções, e avisa só quando a conexão cai.
+ *
+ * A volta (`open`) precisa gravar também: sem isto, depois de cair, notificar
+ * e reconectar sozinha (a Evolution insiste), o banco continuava dizendo
+ * "desconectada" para sempre — só `verificarConexao` corrigia, e ela só roda
+ * com a tela de Conexão aberta. Pior: a PRÓXIMA queda de verdade deixava de
+ * notificar, porque `deveNotificarQueda` exige que o estado anterior fosse
+ * "conectada". Reconectar é boa notícia, então este caminho nunca notifica.
+ */
+async function registrarConexao(evento: EventoWebhook) {
   const dados = evento.data as { state?: string; statusReason?: number } | null
   const estadoNovo = String(dados?.state ?? '')
 
@@ -161,6 +171,19 @@ async function registrarQueda(evento: EventoWebhook) {
     .maybeSingle()
 
   if (!instancia) return
+
+  if (estadoNovo === 'open') {
+    // Nada para gravar se já estava conectada: evita um update por evento
+    // redundante que a Evolution manda de tempos em tempos.
+    if (String(instancia.status) === 'conectada') return
+
+    await admin
+      .from('instances')
+      .update({ status: 'conectada', atualizado_em: new Date().toISOString() })
+      .eq('id', instancia.id)
+    return
+  }
+
   if (!deveNotificarQueda(String(instancia.status), estadoNovo)) return
 
   // O banco precisa refletir a queda, senão a tela seguiria dizendo conectada
@@ -211,7 +234,7 @@ export async function POST(
     const tipo = evento.event.toUpperCase().replace('.', '_')
     if (tipo === 'MESSAGES_UPSERT') await registrarRecebida(evento)
     if (tipo === 'MESSAGES_UPDATE') await registrarRecibo(evento)
-    if (tipo === 'CONNECTION_UPDATE') await registrarQueda(evento)
+    if (tipo === 'CONNECTION_UPDATE') await registrarConexao(evento)
   } catch (erro) {
     console.error('[webhook] falha ao processar evento:', erro)
   }
