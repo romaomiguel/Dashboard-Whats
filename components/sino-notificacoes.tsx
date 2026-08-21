@@ -14,7 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { formatarDataHora } from '@/lib/datas'
+import { formatarDataHora, tempoRelativo } from '@/lib/datas'
 import type { Notificacao, TipoNotificacao } from '@/lib/notificacoes'
 import { criarClienteNavegador } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -236,8 +236,16 @@ export function SinoNotificacoes({
                           {n.corpo}
                         </span>
                       )}
-                      <span className="text-[11px] text-muted-foreground">
-                        {formatarDataHora(n.quando)}
+                      {/* Relativo à vista, absoluto no title: "há 5 min" diz
+                          na hora se a notificação é de agora, e quem precisar
+                          do instante exato passa o mouse. O rótulo se atualiza
+                          sozinho no refresh de reserva, sem temporizador
+                          próprio. */}
+                      <span
+                        className="text-[11px] text-muted-foreground"
+                        title={formatarDataHora(n.quando)}
+                      >
+                        {tempoRelativo(n.quando)}
                       </span>
                     </span>
                   </button>

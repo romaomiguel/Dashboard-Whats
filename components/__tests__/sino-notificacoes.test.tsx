@@ -84,6 +84,18 @@ describe('painel', () => {
     expect(screen.getByText('Oi, tudo bem?')).toBeInTheDocument()
   })
 
+  // A spec pede tempo relativo no painel; a data absoluta fica no title,
+  // para quem precisa do instante exato.
+  it('mostra o tempo relativo, com a data absoluta no title', async () => {
+    vi.setSystemTime(new Date('2026-08-20T13:07:00.000Z'))
+    render(<SinoNotificacoes ownerId="user-1" iniciais={[nota()]} />)
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+
+    const marca = await screen.findByText('há 7 min')
+    expect(marca).toHaveAttribute('title', '20/08, 10:00')
+    vi.useRealTimers()
+  })
+
   it('sem nenhuma, explica em vez de ficar vazio', async () => {
     render(<SinoNotificacoes ownerId="user-1" iniciais={[]} />)
     await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
