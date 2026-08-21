@@ -84,7 +84,9 @@ export function montarNotificacao(evento: EventoNotificavel): NotificacaoMontada
       chave: `mensagem:${numero}`,
       titulo: truncarTitulo(evento.nome ?? numero, 'respondeu'),
       corpo: encurtar(evento.texto),
-      destino: `/mensagens?busca=${encodeURIComponent(numero)}`,
+      // Leva direto para a thread do contato — a Task 3 deu à conversa uma
+      // tela própria, então não precisa mais abrir a lista e filtrar.
+      destino: `/mensagens/${numero}`,
     }
   }
 

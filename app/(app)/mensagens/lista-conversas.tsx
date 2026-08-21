@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { AlertCircle, Check, CornerUpLeft, MessageCircle, Search } from 'lucide-react'
 import { useDadosExemplo } from '@/components/dados-exemplo-provider'
 import { EstadoVazio } from '@/components/estado-vazio'
@@ -177,53 +178,72 @@ export function ListaConversas({
             />
           ) : (
             <div className="divide-y divide-border">
-              {filtradas.map((m) => (
-                <div
-                  key={m.chave}
-                  className="flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="relative">
-                    <Avatar className="size-10">
-                      <AvatarFallback className="bg-primary/15 text-xs font-medium text-primary">
-                        {iniciais(m.contato)}
-                      </AvatarFallback>
-                    </Avatar>
-                    {m.estado === 'respondeu' && m.naoLidas > 0 && (
-                      <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                        {m.naoLidas}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {m.contato}
-                      </p>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {m.hora}
-                      </span>
+              {filtradas.map((m) => {
+                const conteudo = (
+                  <>
+                    <div className="relative">
+                      <Avatar className="size-10">
+                        <AvatarFallback className="bg-primary/15 text-xs font-medium text-primary">
+                          {iniciais(m.contato)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {m.estado === 'respondeu' && m.naoLidas > 0 && (
+                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                          {m.naoLidas}
+                        </span>
+                      )}
                     </div>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {m.previa}
-                    </p>
-                  </div>
 
-                  <Badge
-                    className={cn('gap-1', ESTILO_CONVERSA[m.estado])}
-                    title={DESCRICAO_CONVERSA[m.estado]}
-                  >
-                    {m.estado === 'falhou' ? (
-                      <AlertCircle className="size-3" />
-                    ) : m.estado === 'respondeu' ? (
-                      <CornerUpLeft className="size-3" />
-                    ) : (
-                      <Check className="size-3" />
-                    )}
-                    {ROTULO_CONVERSA[m.estado]}
-                  </Badge>
-                </div>
-              ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {m.contato}
+                        </p>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {m.hora}
+                        </span>
+                      </div>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {m.previa}
+                      </p>
+                    </div>
+
+                    <Badge
+                      className={cn('gap-1', ESTILO_CONVERSA[m.estado])}
+                      title={DESCRICAO_CONVERSA[m.estado]}
+                    >
+                      {m.estado === 'falhou' ? (
+                        <AlertCircle className="size-3" />
+                      ) : m.estado === 'respondeu' ? (
+                        <CornerUpLeft className="size-3" />
+                      ) : (
+                        <Check className="size-3" />
+                      )}
+                      {ROTULO_CONVERSA[m.estado]}
+                    </Badge>
+                  </>
+                )
+
+                const classeLinha =
+                  'flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-muted/50'
+
+                // Os dados de exemplo usam número fictício: virar link abriria
+                // uma thread vazia, parecendo quebrada. Só a conversa real leva
+                // à tela da conversa.
+                if (usandoExemplo) {
+                  return (
+                    <div key={m.chave} className={classeLinha}>
+                      {conteudo}
+                    </div>
+                  )
+                }
+
+                return (
+                  <Link key={m.chave} href={`/mensagens/${m.chave}`} className={classeLinha}>
+                    {conteudo}
+                  </Link>
+                )
+              })}
             </div>
           )}
         </CardContent>

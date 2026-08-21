@@ -83,14 +83,14 @@ describe('montarNotificacao — mensagem', () => {
     expect(n.titulo).toMatch(/… respondeu$/)
   })
 
-  it('leva o número na busca do destino', () => {
+  it('leva direto para a thread do contato', () => {
     const n = montarNotificacao({
       tipo: 'mensagem',
       numero: '556584627628',
       nome: 'Amanda',
       texto: 'Oi',
     })
-    expect(n.destino).toBe('/mensagens?busca=556584627628')
+    expect(n.destino).toBe('/mensagens/556584627628')
   })
 })
 
