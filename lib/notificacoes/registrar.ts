@@ -32,7 +32,9 @@ export async function registrarNotificacao(
     .eq('id', ownerId)
     .maybeSingle()
 
-  // Coluna ausente significa migration não rodada; notificar é o padrão, e
+  // Coluna ausente (migration não rodada) faz o PostgREST devolver erro e
+  // `data: null` — não um objeto sem essa chave. `perfil` vem nulo, então
+  // `preferencia` fica undefined, não false, e o padrão abaixo é notificar:
   // sumir em silêncio seria pior que uma notificação a mais.
   const preferencia = (perfil as Record<string, unknown> | null)?.[coluna]
   if (preferencia === false) return false

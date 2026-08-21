@@ -79,5 +79,6 @@ describe('marcarTodasComoLidas', () => {
     const estado = await marcarTodasComoLidas()
 
     expect(estado.erro).toMatch(/Sessão expirada/)
+    expect(banco.updates).toHaveLength(0)
   })
 })

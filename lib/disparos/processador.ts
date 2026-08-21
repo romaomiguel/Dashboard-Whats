@@ -155,13 +155,20 @@ export async function processarLote(
       .maybeSingle()
 
     if (campanha) {
-      await registrarNotificacao(db, String(instancia.owner_id), {
-        tipo: 'disparo',
-        id: disparo.id,
-        nome: String(campanha.nome),
-        enviados: totalEnviados,
-        total: Number(campanha.total),
-      })
+      // registrarNotificacao promete nunca lançar, mas o processador depende
+      // disso para não interromper o disparo — o try/catch é a garantia, não
+      // só a confiança na promessa.
+      try {
+        await registrarNotificacao(db, String(instancia.owner_id), {
+          tipo: 'disparo',
+          id: disparo.id,
+          nome: String(campanha.nome),
+          enviados: totalEnviados,
+          total: Number(campanha.total),
+        })
+      } catch (erro) {
+        console.error('[disparo] notificação de conclusão falhou:', erro)
+      }
     }
   }
 

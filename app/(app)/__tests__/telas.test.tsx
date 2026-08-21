@@ -390,3 +390,30 @@ describe('resposta e o nono dígito', () => {
     expect(screen.getAllByText('Amanda')).toHaveLength(1)
   })
 })
+
+describe('busca vinda da notificação, na forma canônica', () => {
+  // O destino da notificação leva o número canônico (sem o nono dígito). Se a
+  // última mensagem da conversa veio de um disparo, `m.chave` é o número do
+  // cadastro, cru, com o nono dígito — sem comparar pela forma canônica dos
+  // dois lados, o clique na notificação caía em "Nada encontrado".
+  it('encontra a conversa mesmo com a última mensagem tendo o nono dígito', async () => {
+    montar(
+      <ListaConversas
+        conversas={[
+          {
+            numero: '5565984627628',
+            nome: 'Amanda',
+            previa: 'Oi, tudo bem?',
+            quando: '2026-08-20T13:00:00.000Z',
+            direcao: 'entrada' as const,
+            estado: 'respondeu' as const,
+            naoLidas: 1,
+          },
+        ]}
+        buscaInicial="556584627628"
+      />,
+    )
+
+    expect(await screen.findByText('Amanda')).toBeInTheDocument()
+  })
+})

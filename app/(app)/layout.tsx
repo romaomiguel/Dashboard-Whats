@@ -16,8 +16,10 @@ export default async function LayoutApp({
   // caso o matcher do middleware mude.
   if (!usuario) redirect('/login')
 
-  const nome = await nomeDoPerfil()
-  const notificacoes = await listarNotificacoes()
+  const [nome, notificacoes] = await Promise.all([
+    nomeDoPerfil(),
+    listarNotificacoes(),
+  ])
 
   return (
     <DadosExemploProvider>

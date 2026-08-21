@@ -21,6 +21,7 @@ import {
 import { mensagensRecentes, summary } from '@/lib/data'
 import { formatarHora } from '@/lib/datas'
 import { iniciais } from '@/lib/iniciais'
+import { chaveDoNumero } from '@/lib/numeros'
 import { cn } from '@/lib/utils'
 
 /** Linha da lista, venha ela do banco ou dos dados de exemplo. */
@@ -84,14 +85,21 @@ export function ListaConversas({
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase()
+    // O destino da notificação leva a forma canônica (sem o nono dígito),
+    // mas `m.chave` é o número cru da última mensagem — que, se ela veio de
+    // um disparo, é o número do cadastro, com o nono dígito. Comparando os
+    // dois pela forma canônica, o clique na notificação encontra a conversa
+    // em vez de cair em "Nada encontrado".
+    const termoCanonico = chaveDoNumero(termo)
     return lista
       .filter((m) => filtro === 'todas' || m.estado === filtro)
       .filter(
         (m) =>
           !termo ||
           m.contato.toLowerCase().includes(termo) ||
-          m.chave.includes(termo) ||
-          m.previa.toLowerCase().includes(termo),
+          m.previa.toLowerCase().includes(termo) ||
+          (termoCanonico !== '' &&
+            chaveDoNumero(m.chave).includes(termoCanonico)),
       )
   }, [lista, busca, filtro])
 
