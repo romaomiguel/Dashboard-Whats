@@ -28,6 +28,20 @@ const ICONE: Record<TipoNotificacao, typeof Bell> = {
 /** Acima disso o número deforma o sino. */
 const TETO_CONTADOR = 9
 
+/** Junta os eventos de uma rajada num só refresh. */
+const ATRASO_REFRESH_MS = 1000
+
+/**
+ * Pano de fundo caso o Realtime não conecte.
+ *
+ * Não basta contar com "a próxima navegação": no App Router, o layout é
+ * segmento compartilhado e não refaz a busca do servidor ao trocar de página
+ * dentro dele (só em recarga cheia ou `router.refresh()` explícito). Sem este
+ * intervalo, uma sessão em que o canal falhou ficaria com a lista presa no
+ * que veio no primeiro carregamento até a aba ser fechada.
+ */
+const INTERVALO_RESERVA_MS = 60_000
+
 export function SinoNotificacoes({
   iniciais,
   ownerId,
@@ -40,19 +54,35 @@ export function SinoNotificacoes({
   // A lista do servidor é a verdade; o local guarda só quais foram lidas
   // agora, para o item riscar na hora sem esperar a ação voltar.
   //
+  // Chaveado por id **e** por `quando`, não só id: o upsert do registrador
+  // reaproveita a mesma linha (owner_id, chave) quando a mesma conversa gera
+  // atividade nova, e `quando` (= atualizado_em) muda nesse upsert. Chaveando
+  // só por id, uma segunda mensagem da mesma pessoa reaproveitava o id já
+  // marcado como lido localmente — como o sino vive no layout e não desmonta
+  // em navegação de cliente, a linha voltava do servidor com `lida: false` e
+  // era repintada como lida na hora, silenciando a conversa para sempre. Com
+  // `quando` na chave, atividade nova vira uma chave nova e o item some de
+  // `lidasAgora` sozinho, sem precisar reconciliar nada.
+  //
   // Derivar em vez de copiar com useEffect é proposital: `iniciais` chega como
   // array novo a cada render, e sincronizar por efeito entraria em laço.
   const [lidasAgora, setLidasAgora] = useState<string[]>([])
   const [erro, setErro] = useState('')
 
+  function chaveLeitura(n: Notificacao): string {
+    return `${n.id}:${n.quando}`
+  }
+
   const lista = iniciais.map((n) =>
-    lidasAgora.includes(n.id) ? { ...n, lida: true } : n,
+    lidasAgora.includes(chaveLeitura(n)) ? { ...n, lida: true } : n,
   )
 
-  // Realtime: o canal entrega a linha nova sem recarregar. Caindo, a lista
-  // inicial continua correta e se atualiza na próxima navegação.
+  // Realtime: o canal entrega a linha nova sem recarregar. Os eventos de uma
+  // rajada (até 300 num disparo grande) são juntados num só refresh, por aba
+  // aberta, em vez de um router.refresh() por evento.
   useEffect(() => {
     const supabase = criarClienteNavegador()
+    let temporizador: ReturnType<typeof setTimeout> | null = null
 
     const canal = supabase
       .channel(`notificacoes:${ownerId}`)
@@ -64,27 +94,41 @@ export function SinoNotificacoes({
           table: 'notificacoes',
           filter: `owner_id=eq.${ownerId}`,
         },
-        () => router.refresh(),
+        () => {
+          if (temporizador) clearTimeout(temporizador)
+          temporizador = setTimeout(() => {
+            temporizador = null
+            router.refresh()
+          }, ATRASO_REFRESH_MS)
+        },
       )
       .subscribe()
 
     return () => {
+      if (temporizador) clearTimeout(temporizador)
       supabase.removeChannel(canal)
     }
   }, [ownerId, router])
+
+  // Reserva: cobre o canal que nunca conectou (ver INTERVALO_RESERVA_MS).
+  useEffect(() => {
+    const relogio = setInterval(() => router.refresh(), INTERVALO_RESERVA_MS)
+    return () => clearInterval(relogio)
+  }, [router])
 
   const naoLidas = lista.filter((n) => !n.lida).length
 
   async function abrir(notificacao: Notificacao) {
     setErro('')
-    setLidasAgora((atual) => [...atual, notificacao.id])
+    const chave = chaveLeitura(notificacao)
+    setLidasAgora((atual) => [...atual, chave])
     const resultado = await marcarComoLida(notificacao.id)
 
     if (resultado.erro) {
       // Desfaz a marcação otimista: sem isto o item ficaria riscado na tela
       // com o banco ainda em lida: false, e o usuário só notaria a mentira
       // quando o servidor devolvesse a lista de novo.
-      setLidasAgora((atual) => atual.filter((id) => id !== notificacao.id))
+      setLidasAgora((atual) => atual.filter((c) => c !== chave))
       setErro(resultado.erro)
       // Não navega: se marcar como lida falhou (sessão expirada é o caso
       // real), trocar de tela esconderia o erro atrás da navegação e daria
@@ -101,7 +145,7 @@ export function SinoNotificacoes({
     // isto que volta, não um array vazio, senão desfaria também leituras
     // individuais que já tinham sido confirmadas pelo servidor.
     const antesDaTentativa = lidasAgora
-    setLidasAgora(iniciais.map((n) => n.id))
+    setLidasAgora(iniciais.map((n) => chaveLeitura(n)))
     const resultado = await marcarTodasComoLidas()
 
     if (resultado.erro) {

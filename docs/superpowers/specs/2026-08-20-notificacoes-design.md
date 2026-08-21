@@ -140,8 +140,10 @@ assina `postgres_changes` na tabela, filtrando por `owner_id`.
 - Sem nenhuma: estado vazio dizendo que aparecerão ali
 
 A assinatura é cancelada ao desmontar, e o componente tolera o canal cair: se o
-Realtime não conectar, a lista inicial continua correta e atualiza na próxima
-navegação.
+Realtime não conectar, a lista inicial continua correta até um intervalo de
+reserva forçar um refresh. Navegação sozinha não basta — no App Router o
+layout é segmento compartilhado e não refaz a busca do servidor ao trocar de
+página dentro dele.
 
 ## Preferências
 

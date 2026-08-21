@@ -126,6 +126,32 @@ describe('painel', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('atividade nova na mesma linha volta a acender o sino mesmo já lida', async () => {
+    // O upsert do registrador reaproveita a mesma linha (owner_id, chave)
+    // quando a mesma conversa gera atividade nova: o id não muda, só `quando`
+    // (atualizado_em). Sem chavear a leitura local por isso, o item ficava
+    // riscado como lido para sempre depois do primeiro clique.
+    const original = nota()
+    const { rerender } = render(
+      <SinoNotificacoes ownerId="user-1" iniciais={[original]} />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /Notificações/ }))
+    await userEvent.click(await screen.findByText('Amanda respondeu'))
+
+    await waitFor(() => expect(acoes.lida).toHaveBeenCalledWith('n1'))
+    expect(screen.queryByText('1')).not.toBeInTheDocument()
+
+    // O servidor devolve a mesma linha (mesmo id), agora com nova mensagem:
+    // `quando` mais novo e `lida: false` de novo.
+    const comAtividadeNova = nota({
+      lida: false,
+      quando: '2026-08-20T13:05:00.000Z',
+    })
+    rerender(<SinoNotificacoes ownerId="user-1" iniciais={[comAtividadeNova]} />)
+
+    expect(await screen.findByText('1')).toBeInTheDocument()
+  })
+
   it('contador diminui ao marcar um item só como lido', async () => {
     render(
       <SinoNotificacoes
