@@ -4,6 +4,7 @@ import {
   Contact,
   Home,
   Image as ImageIcon,
+  Kanban,
   Link2,
   MessageCircle,
   MessageSquareText,
@@ -59,6 +60,13 @@ export const ITENS_NAV: ItemNav[] = [
     icon: MessageCircle,
     secao: 'principal',
     contador: summary.mensagens,
+  },
+  {
+    href: '/esteira',
+    label: 'Esteira',
+    subtitulo: 'Funil de etapas dos contatos',
+    icon: Kanban,
+    secao: 'principal',
   },
   {
     href: '/midias',

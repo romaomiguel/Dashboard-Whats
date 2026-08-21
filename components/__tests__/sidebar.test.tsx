@@ -22,12 +22,13 @@ describe('Sidebar', () => {
     window.localStorage.clear()
   })
 
-  it('cobre as sete telas', () => {
+  it('cobre as oito telas', () => {
     expect(ITENS_NAV.map((i) => i.href)).toEqual([
       '/',
       '/conexao',
       '/contatos',
       '/mensagens',
+      '/esteira',
       '/midias',
       '/configuracoes',
       '/disparos',
