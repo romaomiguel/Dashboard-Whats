@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { criarEtapa, moverContato, removerEtapa } from '@/app/(app)/esteira/actions'
+import { criarEtapa, definirPapel, moverNoFunil, removerEtapa } from '@/app/(app)/esteira/actions'
 
 const estado = vi.hoisted(() => ({
   usuario: { id: 'user-1' } as { id: string } | null,
   // Linhas de `etapas` para a contagem do teto em criarEtapa (select bruto).
   etapas: [] as Record<string, unknown>[],
-  // `contatos.maybeSingle()`: o contato buscado por moverContato.
-  contato: null as Record<string, unknown> | null,
-  // `etapas.maybeSingle()`: a etapa de destino buscada por moverContato.
-  // Estado separado do `contato` acima — antes as duas tabelas caíam no
+  // `funil.maybeSingle()`: a linha do funil buscada por moverNoFunil.
+  linhaFunil: null as Record<string, unknown> | null,
+  // `etapas.maybeSingle()`: a etapa de destino buscada por moverNoFunil.
+  // Estado separado da linha do funil acima — antes as duas tabelas caíam no
   // mesmo valor e a checagem de dono da etapa destino ficava impossível de
   // testar.
   etapaDestino: null as Record<string, unknown> | null,
@@ -16,6 +16,12 @@ const estado = vi.hoisted(() => ({
   updates: [] as Record<string, unknown>[],
   deletes: [] as Record<string, unknown>[],
   erroDelete: null as { code?: string; message: string } | null,
+  // Erro devolvido pelo próximo `update`: usado para simular o `23505` do
+  // índice único parcial de `etapas.papel`.
+  erroUpdate: null as { code?: string; message: string } | null,
+  // Erro devolvido pelo próximo `insert`, quando encadeado com
+  // `.select().maybeSingle()` (o caso de criarEtapa lendo o id de volta).
+  erroInsert: null as { code?: string; message: string } | null,
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -29,14 +35,23 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: () => encadeado,
         order: () => encadeado,
         limit: () => encadeado,
-        // Mock ciente da tabela: `contatos` e `etapas` respondem buscas por
-        // id de forma independente, senão nada distingue o contato do
+        // Mock ciente da tabela: `funil` e `etapas` respondem buscas por id
+        // de forma independente, senão nada distingue a linha do funil do
         // usuário da etapa de destino.
         maybeSingle: async () =>
-          tabela === 'etapas' ? { data: estado.etapaDestino } : { data: estado.contato },
-        insert: async (valores: Record<string, unknown>) => {
+          tabela === 'etapas' ? { data: estado.etapaDestino } : { data: estado.linhaFunil },
+        insert: (valores: Record<string, unknown>) => {
           estado.inserts.push({ tabela, ...valores })
-          return { error: null }
+          const resultado = { data: null, error: estado.erroInsert }
+          const cadeia = {
+            // criarEtapa encadeia `.select('id').maybeSingle()` para ler de
+            // volta o id da etapa recém-criada.
+            select: () => ({
+              maybeSingle: async () => ({ data: { id: 'e-nova' }, error: estado.erroInsert }),
+            }),
+            then: (r: (v: typeof resultado) => void) => r(resultado),
+          }
+          return cadeia
         },
         // Mesmo encadeamento do delete abaixo: registra cada `.eq()` no
         // mesmo objeto. O `{ eq: () => ({ eq: async () => ... }) }` de antes
@@ -52,7 +67,7 @@ vi.mock('@/lib/supabase/server', () => ({
             },
             then: (r: (v: { data: null; error: unknown }) => void) => {
               estado.updates.push(registro)
-              return r({ data: null, error: null })
+              return r({ data: null, error: estado.erroUpdate })
             },
           }
           return cadeia
@@ -85,25 +100,32 @@ vi.mock('@/lib/supabase/server', () => ({
 beforeEach(() => {
   estado.usuario = { id: 'user-1' }
   estado.etapas = [{ id: 'e1', nome: 'Novo', ordem: 0 }]
-  estado.contato = { id: 'c1', etapa_id: 'e1', etapas: { nome: 'Novo' } }
+  estado.linhaFunil = { id: 'f1', etapa_id: 'e1', etapas: { nome: 'Novo' } }
   estado.etapaDestino = { id: 'e2', nome: 'Negociando' }
   estado.inserts = []
   estado.updates = []
   estado.deletes = []
   estado.erroDelete = null
+  estado.erroUpdate = null
+  estado.erroInsert = null
 })
 
 describe('criarEtapa', () => {
   it('cria no fim da fila', async () => {
     const r = await criarEtapa('Negociando')
 
-    expect(r).toEqual({ ok: true })
+    expect(r).toEqual({ ok: true, id: 'e-nova' })
     expect(estado.inserts.at(-1)).toMatchObject({
       tabela: 'etapas',
       owner_id: 'user-1',
       nome: 'Negociando',
       ordem: 1,
     })
+  })
+
+  it('devolve o id da etapa criada', async () => {
+    const r = await criarEtapa('Negociando')
+    expect(r.id).toBe('e-nova')
   })
 
   it('recusa nome vazio', async () => {
@@ -138,60 +160,47 @@ describe('criarEtapa', () => {
   })
 })
 
-describe('moverContato', () => {
-  it('atualiza a etapa e registra o histórico', async () => {
-    const r = await moverContato('c1', 'e2')
+describe('moverNoFunil', () => {
+  it('atualiza a etapa e registra o histórico como manual', async () => {
+    const r = await moverNoFunil('f1', 'e2')
 
     expect(r).toEqual({ ok: true })
-    expect(estado.updates.at(-1)).toMatchObject({
-      tabela: 'contatos',
-      etapa_id: 'e2',
-    })
-    // O histórico guarda o nome, não o id: renomear a etapa depois não pode
-    // reescrever o passado.
+    expect(estado.updates.at(-1)).toMatchObject({ tabela: 'funil', etapa_id: 'e2' })
+    // O histórico guarda o nome: renomear a etapa depois não reescreve o
+    // passado. `automatico: false` separa isto da promoção do webhook.
     expect(estado.inserts.at(-1)).toMatchObject({
-      tabela: 'contato_etapa_historico',
-      contato_id: 'c1',
+      tabela: 'funil_historico',
+      funil_id: 'f1',
       de: 'Novo',
+      automatico: false,
     })
   })
 
-  // Só o id não bastaria: sem o owner_id no filtro, um id de contato
+  // Só o id não bastaria: sem o owner_id no filtro, um id de funil
   // adivinhado de outro usuário seria movido junto — a RLS é o backstop, não
   // o único controle.
   it('atualiza filtrando por id e por dono, não só pelo id', async () => {
-    const r = await moverContato('c1', 'e2')
+    const r = await moverNoFunil('f1', 'e2')
 
     expect(r).toEqual({ ok: true })
     expect(estado.updates.at(-1)).toMatchObject({
-      tabela: 'contatos',
-      id: 'c1',
+      tabela: 'funil',
+      id: 'f1',
       owner_id: 'user-1',
     })
   })
 
-  it('aceita tirar o contato da esteira', async () => {
-    const r = await moverContato('c1', null)
-
-    expect(r).toEqual({ ok: true })
-    expect(estado.updates.at(-1)).toMatchObject({ etapa_id: null })
-  })
-
-  it('recusa contato que não é do usuário', async () => {
-    estado.contato = null
-    const r = await moverContato('alheio', 'e2')
+  it('recusa linha que não é do usuário', async () => {
+    estado.linhaFunil = null
+    const r = await moverNoFunil('alheia', 'e2')
 
     expect(r.erro).toBeTruthy()
     expect(estado.updates).toHaveLength(0)
   })
 
-  // O contato é do usuário, mas o destino não existe ou é de outra pessoa
-  // (id adivinhado, etapa apagada entre a leitura da tela e o clique). Sem
-  // essa checagem, mover para uma etapa alheia moveria o contato mesmo
-  // assim, vazando id de etapa de outro usuário.
-  it('recusa etapa de destino que não existe ou não é do usuário', async () => {
+  it('recusa etapa de destino que não é do usuário', async () => {
     estado.etapaDestino = null
-    const r = await moverContato('c1', 'etapa-alheia')
+    const r = await moverNoFunil('f1', 'e-alheia')
 
     expect(r.erro).toMatch(/Etapa não encontrada/)
     expect(estado.updates).toHaveLength(0)
@@ -200,7 +209,46 @@ describe('moverContato', () => {
 
   it('recusa sem sessão', async () => {
     estado.usuario = null
-    const r = await moverContato('c1', 'e2')
+    const r = await moverNoFunil('f1', 'e2')
+    expect(r.erro).toMatch(/Sessão expirada/)
+  })
+})
+
+describe('definirPapel', () => {
+  it('marca o papel na etapa do usuário', async () => {
+    const r = await definirPapel('e1', 'entrada')
+
+    expect(r).toEqual({ ok: true })
+    expect(estado.updates.at(-1)).toMatchObject({
+      tabela: 'etapas',
+      papel: 'entrada',
+      id: 'e1',
+      owner_id: 'user-1',
+    })
+  })
+
+  it('aceita limpar o papel', async () => {
+    const r = await definirPapel('e1', null)
+    expect(r).toEqual({ ok: true })
+    expect(estado.updates.at(-1)).toMatchObject({ papel: null })
+  })
+
+  it('recusa papel inventado', async () => {
+    const r = await definirPapel('e1', 'chefe' as never)
+    expect(r.erro).toBeTruthy()
+    expect(estado.updates).toHaveLength(0)
+  })
+
+  // Índice único parcial: o papel já está em outra etapa.
+  it('explica quando o papel já é de outra etapa', async () => {
+    estado.erroUpdate = { code: '23505', message: 'duplicado' }
+    const r = await definirPapel('e1', 'entrada')
+    expect(r.erro).toMatch(/outra etapa/i)
+  })
+
+  it('recusa sem sessão', async () => {
+    estado.usuario = null
+    const r = await definirPapel('e1', 'entrada')
     expect(r.erro).toMatch(/Sessão expirada/)
   })
 })

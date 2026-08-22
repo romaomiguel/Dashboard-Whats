@@ -2,9 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { LIMITE_ETAPAS, nomeDeEtapaValido, proximaOrdem } from '@/lib/esteira'
+import { PAPEIS, type Papel } from '@/lib/funil'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
-export type EstadoEsteira = { erro?: string; ok?: boolean }
+export type EstadoEsteira = { erro?: string; ok?: boolean; id?: string }
 
 async function usuarioAtual() {
   const supabase = await criarClienteServidor()
@@ -36,11 +37,18 @@ export async function criarEtapa(nome: string): Promise<EstadoEsteira> {
     return { erro: `Você atingiu o limite de ${LIMITE_ETAPAS} etapas.` }
   }
 
-  const { error } = await supabase.from('etapas').insert({
-    owner_id: user.id,
-    nome: limpo,
-    ordem: proximaOrdem(ordens),
-  })
+  const { data: criada, error } = await supabase
+    .from('etapas')
+    .insert({
+      owner_id: user.id,
+      nome: limpo,
+      ordem: proximaOrdem(ordens),
+    })
+    // O id volta porque montar o funil padrão precisa marcar o papel logo
+    // em seguida; sem ele, a tela teria de reler tudo para achar qual etapa
+    // acabou de nascer.
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     if (error.code === '23505') return { erro: 'Você já tem uma etapa com esse nome.' }
@@ -48,69 +56,95 @@ export async function criarEtapa(nome: string): Promise<EstadoEsteira> {
   }
 
   revalidatePath('/esteira')
-  return { ok: true }
+  return { ok: true, id: criada ? String(criada.id) : undefined }
 }
 
 /**
- * Move o contato de etapa e registra a passagem.
+ * Move a conversa de etapa e registra a passagem.
  *
- * O histórico guarda o **nome** da etapa, não o id: renomear "Negociando"
- * para "Proposta" não pode reescrever o passado, e apagar a etapa não pode
- * levar o histórico junto.
+ * `null` não é destino válido: sem a coluna "Sem etapa", tirar do funil
+ * deixou de ser uma operação da tela.
  */
-export async function moverContato(
-  contatoId: string,
-  etapaId: string | null,
+export async function moverNoFunil(
+  funilId: string,
+  etapaId: string,
 ): Promise<EstadoEsteira> {
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  const { data: contato } = await supabase
-    .from('contatos')
+  const { data: linha } = await supabase
+    .from('funil')
     .select('id, etapa_id, etapas(nome)')
-    .eq('id', contatoId)
+    .eq('id', funilId)
     .eq('owner_id', user.id)
     .maybeSingle()
 
-  if (!contato) return { erro: 'Contato não encontrado.' }
+  if (!linha) return { erro: 'Conversa não encontrada.' }
 
-  let nomeDestino = 'Sem etapa'
-  if (etapaId) {
-    const { data: destino } = await supabase
-      .from('etapas')
-      .select('nome')
-      .eq('id', etapaId)
-      .eq('owner_id', user.id)
-      .maybeSingle()
+  const { data: destino } = await supabase
+    .from('etapas')
+    .select('nome')
+    .eq('id', etapaId)
+    .eq('owner_id', user.id)
+    .maybeSingle()
 
-    if (!destino) return { erro: 'Etapa não encontrada.' }
-    nomeDestino = String(destino.nome)
-  }
+  if (!destino) return { erro: 'Etapa não encontrada.' }
 
   const { error } = await supabase
-    .from('contatos')
+    .from('funil')
     .update({ etapa_id: etapaId, atualizado_em: new Date().toISOString() })
-    .eq('id', contatoId)
+    .eq('id', funilId)
     .eq('owner_id', user.id)
 
-  if (error) return { erro: 'Não foi possível mover o contato.' }
+  if (error) return { erro: 'Não foi possível mover a conversa.' }
 
-  const de = (contato as { etapas?: { nome?: string } }).etapas?.nome ?? null
-
-  // Falha aqui não desfaz a movimentação: o contato já está na etapa certa, e
-  // perder uma linha de histórico é menos grave que devolver erro para uma
-  // ação que aconteceu.
-  const { error: erroHistorico } = await supabase
-    .from('contato_etapa_historico')
-    .insert({
-      owner_id: user.id,
-      contato_id: contatoId,
-      de,
-      para: nomeDestino,
-    })
+  // Falha aqui não desfaz a movimentação: a conversa já está na etapa
+  // certa, e perder uma linha de histórico é menos grave que devolver erro
+  // para uma ação que aconteceu.
+  const { error: erroHistorico } = await supabase.from('funil_historico').insert({
+    owner_id: user.id,
+    funil_id: funilId,
+    de: (linha as { etapas?: { nome?: string } }).etapas?.nome ?? null,
+    para: String(destino.nome),
+    automatico: false,
+  })
 
   if (erroHistorico) {
     console.error('[esteira] histórico não gravou:', erroHistorico.code, erroHistorico.message)
+  }
+
+  revalidatePath('/esteira')
+  return { ok: true }
+}
+
+/**
+ * Marca qual etapa recebe conversa nova e qual recebe quem respondeu.
+ *
+ * É o que permite renomear as etapas sem quebrar a automação: ela procura
+ * o papel, nunca o nome.
+ */
+export async function definirPapel(
+  etapaId: string,
+  papel: Papel | null,
+): Promise<EstadoEsteira> {
+  const { supabase, user } = await usuarioAtual()
+  if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
+
+  if (papel !== null && !PAPEIS.includes(papel)) {
+    return { erro: 'Papel inválido.' }
+  }
+
+  const { error } = await supabase
+    .from('etapas')
+    .update({ papel })
+    .eq('id', etapaId)
+    .eq('owner_id', user.id)
+
+  if (error) {
+    if (error.code === '23505') {
+      return { erro: 'Esse papel já pertence a outra etapa. Tire dela primeiro.' }
+    }
+    return { erro: 'Não foi possível definir o papel da etapa.' }
   }
 
   revalidatePath('/esteira')
@@ -121,8 +155,8 @@ export async function removerEtapa(id: string): Promise<EstadoEsteira> {
   const { supabase, user } = await usuarioAtual()
   if (!user) return { erro: 'Sessão expirada. Entre novamente.' }
 
-  // O `on delete set null` da 0014 devolve os contatos para "sem etapa"; o
-  // histórico sobrevive porque guarda o nome, não a referência.
+  // O 'on delete set null' da 0015 deixa a linha do funil órfã; a próxima
+  // mensagem daquela conversa devolve ela para a entrada.
   const { error } = await supabase
     .from('etapas')
     .delete()
