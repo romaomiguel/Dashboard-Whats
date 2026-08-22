@@ -29,6 +29,9 @@ const linhas = [
   { id: 'f1', etapaId: 'e1' },
   { id: 'f2', etapaId: 'e2' },
   { id: 'f3', etapaId: null },
+  // Linha propositalmente desatualizada em relação ao ref: serve só ao teste
+  // abaixo, que precisa que `linhas` e o payload do ref discordem.
+  { id: 'f4', etapaId: 'e1' },
 ]
 
 describe('resolverDestino', () => {
@@ -98,6 +101,21 @@ describe('resolverDestino', () => {
 
     expect(
       resolverDestino({ active: { id: 'f1', data: {} }, over: { id: 'e1' } }, etapas, linhas),
+    ).toBeNull()
+  })
+
+  // `linhas` pode estar desatualizado (leitura anterior à soltura); o ref é
+  // que sabe onde o card está agora. Aqui os dois discordam de propósito —
+  // f4 está em 'e1' segundo `linhas`, mas o ref diz 'e2' — e solta-se sobre
+  // 'e2': se a decisão confiasse em `linhas` em vez do ref, isto sairia como
+  // movimento; confiando no ref, é a mesma coluna, então nulo.
+  it('confia no ref quando ele diverge da etapa que `linhas` registra', () => {
+    expect(
+      resolverDestino(
+        { active: { id: 'f4', data: { current: { etapaId: 'e2' } } }, over: { id: 'e2' } },
+        etapas,
+        linhas,
+      ),
     ).toBeNull()
   })
 
