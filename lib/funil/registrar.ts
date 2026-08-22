@@ -70,7 +70,7 @@ export async function registrarNoFunil(admin: ClienteAdmin, dados: Dados): Promi
       return
     }
 
-    await admin
+    const { error: erroUpdate } = await admin
       .from('funil')
       .update({
         etapa_id: movimento.etapaId,
@@ -79,6 +79,10 @@ export async function registrarNoFunil(admin: ClienteAdmin, dados: Dados): Promi
       })
       .eq('id', atual!.id)
       .eq('owner_id', dados.ownerId)
+
+    if (erroUpdate) {
+      console.error('[funil] não promoveu:', erroUpdate.code, erroUpdate.message)
+    }
 
     const { error: erroHistorico } = await admin.from('funil_historico').insert({
       owner_id: dados.ownerId,

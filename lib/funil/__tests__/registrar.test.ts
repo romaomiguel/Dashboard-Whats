@@ -8,6 +8,7 @@ const estado = vi.hoisted(() => ({
   updates: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
   erroUpsert: null as { code: string; message: string } | null,
+  erroUpdate: null as { code: string; message: string } | null,
 }))
 
 function clienteFalso() {
@@ -30,7 +31,7 @@ function clienteFalso() {
         },
         update: (valores: Record<string, unknown>) => {
           estado.updates.push({ tabela, ...valores })
-          return { eq: () => ({ eq: async () => ({ error: null }) }) }
+          return { eq: () => ({ eq: async () => ({ error: estado.erroUpdate }) }) }
         },
         insert: async (valores: Record<string, unknown>) => {
           estado.inserts.push({ tabela, ...valores })
@@ -54,6 +55,7 @@ beforeEach(() => {
   estado.updates = []
   estado.inserts = []
   estado.erroUpsert = null
+  estado.erroUpdate = null
 })
 
 describe('registrarNoFunil', () => {
@@ -132,5 +134,27 @@ describe('registrarNoFunil', () => {
         direcao: 'saida',
       }),
     ).resolves.toBeUndefined()
+  })
+
+  // Achado da revisão: o update do caminho de promoção descartava o erro
+  // sem log nenhum — a única mutação do arquivo que fazia isso. Contradizia
+  // o próprio contrato da função (falha vira log, nunca exceção) e o padrão
+  // já seguido pelo upsert e pelo insert do histórico logo abaixo dele.
+  it('loga quando o update da promoção falha, sem estourar', async () => {
+    estado.linha = { id: 'f1', etapa_id: 'e-novo', etapas: { nome: 'Novo' } }
+    estado.erroUpdate = { code: '40001', message: 'conflito de serialização' }
+    const espiao = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      registrarNoFunil(clienteFalso() as never, {
+        ownerId: 'user-1',
+        numero: '556584038479',
+        direcao: 'entrada',
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(espiao).toHaveBeenCalledWith('[funil] não promoveu:', '40001', 'conflito de serialização')
+
+    espiao.mockRestore()
   })
 })
