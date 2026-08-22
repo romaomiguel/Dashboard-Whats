@@ -54,9 +54,11 @@ describe('listarEsteira', () => {
     expect(linhas[0]).toMatchObject({ id: 'f1', nome: 'Matheus', numero: '556584038479' })
   })
 
-  // Quem te escreveu sem estar no cadastro ainda tem nome: o pushName.
+  // Quem te escreveu sem estar no cadastro ainda tem nome: o pushName. A
+  // mensagem chega com o nono dígito — a forma oposta à do funil — para que
+  // o teste quebre se o pushName parar de passar por chaveDoNumero.
   it('cai no pushName quando não há contato', async () => {
-    estado.mensagens = [{ numero: '556584038479', nome: 'Ana' }]
+    estado.mensagens = [{ numero: '5565984038479', nome: 'Ana' }]
 
     const { linhas } = await listarEsteira()
     expect(linhas[0].nome).toBe('Ana')
@@ -69,9 +71,23 @@ describe('listarEsteira', () => {
 
   it('o contato cadastrado ganha do pushName', async () => {
     estado.contatos = [{ nome: 'Matheus', numero: '556584038479' }]
-    estado.mensagens = [{ numero: '556584038479', nome: 'Ana' }]
+    estado.mensagens = [{ numero: '5565984038479', nome: 'Ana' }]
 
     const { linhas } = await listarEsteira()
     expect(linhas[0].nome).toBe('Matheus')
+  })
+
+  // A consulta devolve as mensagens da mais nova para a mais antiga; o mapa
+  // de pushName tem de manter só a primeira que aparecer. Duas linhas da
+  // mesma pessoa, nesta ordem, provam a guarda — se ela virar um set()
+  // incondicional, a segunda (mais antiga) sobrescreve a primeira.
+  it('mantém o pushName mais recente quando há mais de uma mensagem', async () => {
+    estado.mensagens = [
+      { numero: '5565984038479', nome: 'Ana Nova' },
+      { numero: '5565984038479', nome: 'Ana Antiga' },
+    ]
+
+    const { linhas } = await listarEsteira()
+    expect(linhas[0].nome).toBe('Ana Nova')
   })
 })
