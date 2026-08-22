@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { enviarMensagem } from '@/app/(app)/mensagens/actions'
 
+const funil = vi.hoisted(() => ({ registrar: vi.fn() }))
+
+vi.mock('@/lib/funil/registrar', () => ({
+  registrarNoFunil: (...args: unknown[]) => funil.registrar(...args),
+}))
+
 const estado = vi.hoisted(() => ({
   usuario: { id: 'user-1' } as { id: string } | null,
   // Linhas recentes de `mensagens`, como a busca real devolve: a ação filtra
@@ -83,9 +89,22 @@ beforeEach(() => {
   estado.erroGravacao = null
   estado.envio = { key: { id: 'K-NOVA' } }
   estado.falhaEnvio = null
+  funil.registrar.mockClear()
 })
 
 describe('enviarMensagem', () => {
+  // Responder alguém novo pela plataforma tem de criar o card, senão a
+  // conversa existe na tela de Mensagens e não existe no funil.
+  it('inscreve a conversa no funil ao enviar', async () => {
+    await enviarMensagem('556584038479', 'Olá')
+
+    expect(funil.registrar).toHaveBeenCalledWith(expect.anything(), {
+      ownerId: 'user-1',
+      numero: '556584038479',
+      direcao: 'saida',
+    })
+  })
+
   it('grava a saída com a chave devolvida pela Evolution', async () => {
     const r = await enviarMensagem('556584038479', 'Olá')
 

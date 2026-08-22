@@ -6,6 +6,7 @@ import { chamar } from '@/lib/evolution/client'
 import { endpoints } from '@/lib/evolution/endpoints'
 import { mesmoNumero } from '@/lib/numeros'
 import { criarClienteServidor } from '@/lib/supabase/server'
+import { registrarNoFunil } from '@/lib/funil/registrar'
 
 export type EstadoEnvio = { erro?: string; ok?: boolean }
 
@@ -124,6 +125,14 @@ export async function enviarMensagem(
   if (error && error.code !== '23505') {
     return { erro: 'A mensagem saiu, mas não foi possível gravá-la.' }
   }
+
+  // Inscreve a conversa no funil. Falha aqui não pode derrubar um envio que
+  // já saiu — o próprio registrador engole o erro.
+  await registrarNoFunil(supabase, {
+    ownerId: user.id,
+    numero,
+    direcao: 'saida',
+  })
 
   revalidatePath(`/mensagens/${numero}`)
   revalidatePath('/mensagens')

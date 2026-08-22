@@ -10,11 +10,28 @@ const banco = vi.hoisted(() => ({
     | { id: string; owner_id: string; nome: string; status: string }
     | null,
   atualizacoesInstancia: [] as Record<string, unknown>[],
+  // Mensagens gravadas via upsert em MESSAGES_UPSERT — só o suficiente para
+  // não estourar a tabela não simulada; os testes do funil não checam isto.
+  mensagens: [] as Record<string, unknown>[],
+}))
+
+const funil = vi.hoisted(() => ({ registrar: vi.fn() }))
+
+vi.mock('@/lib/funil/registrar', () => ({
+  registrarNoFunil: (...args: unknown[]) => funil.registrar(...args),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
   criarClienteAdmin: () => ({
     from(tabela: string) {
+      if (tabela === 'mensagens') {
+        return {
+          upsert: async (valores: Record<string, unknown>) => {
+            banco.mensagens.push(valores)
+            return { error: null }
+          },
+        }
+      }
       if (tabela !== 'instances') {
         throw new Error(`tabela não simulada nos testes do webhook: ${tabela}`)
       }
@@ -69,6 +86,8 @@ describe('POST /api/webhooks/evolution/[segredo]', () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     banco.instancia = null
     banco.atualizacoesInstancia = []
+    banco.mensagens = []
+    funil.registrar.mockClear()
   })
 
   afterEach(() => {
@@ -215,6 +234,65 @@ describe('POST /api/webhooks/evolution/[segredo]', () => {
       expect(resposta.status).toBe(200)
       expect(banco.atualizacoesInstancia).toHaveLength(0)
       expect(registrarNotificacaoMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('MESSAGES_UPSERT', () => {
+    beforeEach(() => {
+      banco.instancia = {
+        id: 'inst-1',
+        owner_id: 'user-1',
+        nome: 'Comercial',
+        status: 'conectada',
+      }
+    })
+
+    function eventoDeMensagemRecebida() {
+      return {
+        event: 'messages.upsert',
+        instance: 'inst_a1b2c3d4',
+        data: {
+          key: { remoteJid: '556584038479@s.whatsapp.net', fromMe: false, id: 'MSG-1' },
+          pushName: 'Fulano',
+          message: { conversation: 'Oi' },
+        },
+      }
+    }
+
+    function eventoDeMensagemPropria() {
+      return {
+        event: 'messages.upsert',
+        instance: 'inst_a1b2c3d4',
+        data: {
+          key: { remoteJid: '556584038479@s.whatsapp.net', fromMe: true, id: 'MSG-2' },
+          message: { conversation: 'Oi, aqui é a empresa' },
+        },
+      }
+    }
+
+    // Quem te escreve entra no funil mesmo sem estar em Contatos — é o caso
+    // que a esteira por contato não cobria.
+    it('inscreve a conversa recebida no funil', async () => {
+      await POST(requisicao(eventoDeMensagemRecebida()), {
+        params: Promise.resolve({ segredo: 'segredo-certo' }),
+      })
+
+      expect(funil.registrar).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ direcao: 'entrada' }),
+      )
+    })
+
+    // O eco `fromMe` da própria conta é saída: inscreve, mas não promove.
+    it('marca o eco da própria conta como saída', async () => {
+      await POST(requisicao(eventoDeMensagemPropria()), {
+        params: Promise.resolve({ segredo: 'segredo-certo' }),
+      })
+
+      expect(funil.registrar).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ direcao: 'saida' }),
+      )
     })
   })
 })

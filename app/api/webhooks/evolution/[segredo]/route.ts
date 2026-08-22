@@ -4,6 +4,7 @@ import { criarClienteAdmin } from '@/lib/supabase/admin'
 import type { EventoWebhook } from '@/lib/evolution/types'
 import { registrarNotificacao } from '@/lib/notificacoes/registrar'
 import { deveNotificarQueda } from '@/lib/notificacoes'
+import { registrarNoFunil } from '@/lib/funil/registrar'
 
 /** Texto da mensagem, nas formas que a Evolution usa conforme o tipo. */
 function textoDaMensagem(dados: unknown): string | null {
@@ -134,6 +135,15 @@ async function registrarRecebida(evento: EventoWebhook) {
   if (error) {
     console.error('[webhook] não gravou a mensagem:', error.code, error.message)
   }
+
+  // O funil acompanha a conversa: mensagem enviada ou recebida inscreve, e
+  // só a recebida promove. O registrador nunca estoura, então o webhook
+  // continua respondendo mesmo se o funil falhar.
+  await registrarNoFunil(admin, {
+    ownerId: instancia.owner_id,
+    numero,
+    direcao: daPropriaConta ? 'saida' : 'entrada',
+  })
 
   // Só resposta de contato vira notificação: o que sai do próprio número não
   // é novidade para quem enviou.
