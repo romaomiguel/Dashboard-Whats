@@ -26,7 +26,7 @@ import {
   moverNoFunil,
   removerEtapa,
 } from '@/app/(app)/esteira/actions'
-import { resolverArraste } from '@/app/(app)/esteira/arraste'
+import { resolverDestino } from '@/app/(app)/esteira/arraste'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ETAPAS_PADRAO, LIMITE_NOME_ETAPA } from '@/lib/esteira'
@@ -198,30 +198,12 @@ export function Quadro({ etapas, linhas }: { etapas: Etapa[]; linhas: LinhaDoFun
     router.refresh()
   }
 
+  // Fino de propósito: a decisão inteira — desembrulhar o ref, traduzir card
+  // em coluna, descartar a soltura sem movimento — mora em `resolverDestino`,
+  // que é puro e testado. Arrastar não é testável de forma honesta em jsdom,
+  // então nada que possa dar errado pode ficar deste lado.
   async function aoSoltar(evento: DragEndEvent) {
-    // Duas traduções antes de decidir, e é por isso que elas ficam aqui e não
-    // dentro de `resolverArraste`: ele é puro para poder ser testado, já que
-    // arrastar não é testável de forma honesta em jsdom.
-    //
-    // 1) `active.data` do dnd-kit é um ref — o dado útil está em `.current`.
-    // 2) soltar em cima de outro card devolve o id do card, não o da coluna;
-    //    sem traduzir para a etapa dele, o destino seria um id que não existe
-    //    em `etapas` e o servidor responderia "Etapa não encontrada".
-    const sobre = evento.over ? String(evento.over.id) : null
-    const etapaDestino =
-      sobre === null
-        ? null
-        : etapas.some((e) => e.id === sobre)
-          ? sobre
-          : (linhas.find((l) => l.id === sobre)?.etapaId ?? null)
-
-    const destino = resolverArraste({
-      active: {
-        id: evento.active.id,
-        data: evento.active.data.current as { etapaId?: string | null } | undefined,
-      },
-      over: etapaDestino ? { id: etapaDestino } : null,
-    })
+    const destino = resolverDestino(evento, etapas, linhas)
     if (!destino) return
 
     await mover(destino.funilId, destino.etapaId)
