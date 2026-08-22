@@ -1,42 +1,75 @@
+import type { Papel } from '@/lib/funil'
+import { chaveDoNumero } from '@/lib/numeros'
 import { criarClienteServidor } from '@/lib/supabase/server'
 
-export type Etapa = { id: string; nome: string; ordem: number }
-export type ContatoNaEsteira = {
+export type Etapa = { id: string; nome: string; ordem: number; papel: Papel | null }
+
+export type LinhaDoFunil = {
+  /** Id da linha do funil — é este que `moverNoFunil` recebe. */
   id: string
   nome: string
   numero: string
   etapaId: string | null
 }
 
+/** Teto da varredura de nomes; o mesmo espírito de `listarConversas`. */
+const LIMITE_NOMES = 500
+
 /**
- * O funil inteiro numa ida só.
+ * O funil inteiro, com o nome de exibição resolvido.
  *
- * Contato sem etapa entra na coluna "Sem etapa" da tela: escondê-lo faria
- * sumir da vista quem acabou de ser importado, que é justamente quem precisa
- * ser triado.
+ * O nome sai, nesta ordem, do contato cadastrado, do pushName da última
+ * mensagem, ou do próprio número. A reconciliação é em memória e pela chave
+ * canônica porque as três tabelas gravam o número em formas diferentes —
+ * casar por igualdade crua mostraria o número no lugar do nome justamente
+ * nas conversas que vieram de disparo.
  */
 export async function listarEsteira(): Promise<{
   etapas: Etapa[]
-  contatos: ContatoNaEsteira[]
+  linhas: LinhaDoFunil[]
 }> {
   const supabase = await criarClienteServidor()
 
-  const [etapas, contatos] = await Promise.all([
-    supabase.from('etapas').select('id, nome, ordem').order('ordem'),
-    supabase.from('contatos').select('id, nome, numero, etapa_id').order('nome'),
+  const [etapas, funil, contatos, mensagens] = await Promise.all([
+    supabase.from('etapas').select('id, nome, ordem, papel').order('ordem'),
+    supabase.from('funil').select('id, chave_numero, numero, etapa_id'),
+    supabase.from('contatos').select('nome, numero'),
+    supabase
+      .from('mensagens')
+      .select('numero, nome')
+      .order('criado_em', { ascending: false })
+      .limit(LIMITE_NOMES),
   ])
+
+  const porContato = new Map<string, string>()
+  for (const c of contatos.data ?? []) {
+    if (c.nome) porContato.set(chaveDoNumero(String(c.numero)), String(c.nome))
+  }
+
+  // A lista vem da mais nova para a mais antiga; o primeiro nome que
+  // aparecer é o mais recente, então não sobrescrever.
+  const porPushName = new Map<string, string>()
+  for (const m of mensagens.data ?? []) {
+    const chave = chaveDoNumero(String(m.numero))
+    if (m.nome && !porPushName.has(chave)) porPushName.set(chave, String(m.nome))
+  }
 
   return {
     etapas: (etapas.data ?? []).map((e) => ({
       id: String(e.id),
       nome: String(e.nome),
       ordem: Number(e.ordem),
+      papel: e.papel ? (String(e.papel) as Papel) : null,
     })),
-    contatos: (contatos.data ?? []).map((c) => ({
-      id: String(c.id),
-      nome: String(c.nome),
-      numero: String(c.numero),
-      etapaId: c.etapa_id ? String(c.etapa_id) : null,
-    })),
+    linhas: (funil.data ?? []).map((f) => {
+      const chave = String(f.chave_numero)
+      const numero = String(f.numero)
+      return {
+        id: String(f.id),
+        nome: porContato.get(chave) ?? porPushName.get(chave) ?? numero,
+        numero,
+        etapaId: f.etapa_id ? String(f.etapa_id) : null,
+      }
+    }),
   }
 }
