@@ -70,7 +70,18 @@ export async function registrarNoFunil(admin: ClienteAdmin, dados: Dados): Promi
       return
     }
 
-    const { error: erroUpdate } = await admin
+    // Compare-and-swap, não update cego: o filtro repete a etapa que a
+    // leitura acima viu. Entre ler e escrever cabe um arraste — a pessoa
+    // leva o card para "Negociando" e esta promoção, filtrando só por id,
+    // o puxaria de volta para "Em conversa". A seção 3 do design promete
+    // que mensagem recebida nunca desfaz movimento manual; sem esta
+    // condição a promessa vale só quando ninguém está usando o quadro.
+    //
+    // `.select('id')` é o que faz o PostgREST devolver as linhas afetadas
+    // (`Prefer: return=representation`), e é por elas que dá para saber se a
+    // condição ainda valia — sem isso, `update` só devolve erro, e "zero
+    // linhas" é indistinguível de "gravou".
+    const { data: promovidas, error: erroUpdate } = await admin
       .from('funil')
       .update({
         etapa_id: movimento.etapaId,
@@ -79,10 +90,21 @@ export async function registrarNoFunil(admin: ClienteAdmin, dados: Dados): Promi
       })
       .eq('id', atual!.id)
       .eq('owner_id', dados.ownerId)
+      .eq('etapa_id', atual!.etapa_id)
+      .select('id')
 
     if (erroUpdate) {
       console.error('[funil] não promoveu:', erroUpdate.code, erroUpdate.message)
+      // Sem este return o histórico gravaria "Novo → Em conversa" para uma
+      // promoção que não aconteceu: o card fica em "Novo" e a linha do tempo
+      // jura que ele saiu de lá. É exatamente a história falsa que a coluna
+      // `automatico` existe para não contar.
+      return
     }
+
+    // Nenhuma linha casou: o card já não estava na etapa lida. Nada mudou no
+    // funil, então não há movimento a historiar.
+    if ((promovidas ?? []).length === 0) return
 
     const { error: erroHistorico } = await admin.from('funil_historico').insert({
       owner_id: dados.ownerId,

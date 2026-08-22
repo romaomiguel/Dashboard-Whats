@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   DndContext,
@@ -31,7 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ETAPAS_PADRAO, LIMITE_NOME_ETAPA } from '@/lib/esteira'
 import { PAPEIS, type Papel } from '@/lib/funil'
-import { chaveDoNumero } from '@/lib/numeros'
+import { formasDoNumero } from '@/lib/numeros'
 import type { Etapa, LinhaDoFunil } from '@/lib/consultas/esteira'
 
 /**
@@ -60,10 +61,20 @@ function Card({ linha }: { linha: LinhaDoFunil }) {
       }}
       className="flex items-start justify-between gap-2 rounded-md border border-border bg-background p-2.5"
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
+      {/* O card leva à conversa: achar a pessoa no quadro e ter de redigitar
+          o número em Mensagens é o caminho que a esteira existe para poupar.
+          Vai no corpo, e não no card inteiro, porque a alça é que carrega os
+          ouvintes do arraste — um clique aqui é clique, nunca começo de
+          arraste. O número usado é o `funil.numero` (última forma vista, que
+          existe de fato no WhatsApp), não a chave canônica; a thread casa
+          pelas duas de qualquer jeito. */}
+      <Link
+        href={`/mensagens/${linha.numero}`}
+        className="flex min-w-0 flex-col gap-0.5 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+      >
         <span className="truncate text-sm font-medium text-foreground">{linha.nome}</span>
         <span className="truncate text-xs text-muted-foreground">{linha.numero}</span>
-      </div>
+      </Link>
 
       <button
         type="button"
@@ -345,16 +356,19 @@ export function Quadro({ etapas, linhas }: { etapas: Etapa[]; linhas: LinhaDoFun
     )
   }
 
-  // Busca por número compara pela chave canônica: o contato pode ter sido
-  // salvo com o nono dígito e a conversa ter vindo sem, e digitar qualquer
-  // uma das formas tem de achar a mesma pessoa.
+  // Busca por número: o que a pessoa digitou, só os dígitos, contra as duas
+  // grafias da conversa (com e sem o nono dígito). Canonizar o termo digitado
+  // não bastava — `chaveDoNumero` só tira o nono de um número completo, então
+  // um pedaço com o 9 dentro (`65984038479`, o jeito natural de digitar)
+  // nunca casava com uma conversa gravada sem ele.
   const termo = busca.trim().toLowerCase()
-  const termoCanonico = chaveDoNumero(termo)
+  const digitosDoTermo = termo.replace(/\D/g, '')
   const visiveis = linhas.filter(
     (l) =>
       !termo ||
       l.nome.toLowerCase().includes(termo) ||
-      (termoCanonico !== '' && chaveDoNumero(l.numero).includes(termoCanonico)),
+      (digitosDoTermo !== '' &&
+        formasDoNumero(l.numero).some((forma) => forma.includes(digitosDoTermo))),
   )
 
   return (

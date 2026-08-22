@@ -29,3 +29,33 @@ export function chaveDoNumero(numero: string): string {
 export function mesmoNumero(a: string, b: string): boolean {
   return chaveDoNumero(a) === chaveDoNumero(b)
 }
+
+/**
+ * As formas de escrever este número que uma busca por dígitos deve alcançar.
+ *
+ * A chave canônica sozinha não serve para busca parcial: ela só tira o nono
+ * dígito de um número **completo** de 13 dígitos começando com 55. Quem
+ * digita do jeito natural — `65984038479`, ou só `984038479` — nunca chega
+ * aos 13 e por isso nunca casaria com uma conversa gravada sem o nono, que é
+ * justamente a forma que o webhook do WhatsApp escreve.
+ *
+ * Devolver as duas grafias completas (com e sem o nono) resolve pelo outro
+ * lado: qualquer pedaço que a pessoa digite é substring de uma delas.
+ */
+export function formasDoNumero(numero: string): string[] {
+  const digitos = numero.replace(/\D/g, '')
+  const canonica = chaveDoNumero(numero)
+  const formas = new Set([digitos, canonica])
+
+  // 55 + DDD (2) + oito dígitos. Só celular ganhou o nono: reinventá-lo num
+  // fixo criaria um número que não existe e casaria com busca alheia — daí a
+  // checagem do primeiro dígito do assinante, que em celular é 6 a 9.
+  const ehCelularSemNove =
+    canonica.length === 12 && canonica.startsWith('55') && /[6-9]/.test(canonica[4])
+
+  if (ehCelularSemNove) {
+    formas.add(canonica.slice(0, 4) + '9' + canonica.slice(4))
+  }
+
+  return [...formas].filter((f) => f !== '')
+}

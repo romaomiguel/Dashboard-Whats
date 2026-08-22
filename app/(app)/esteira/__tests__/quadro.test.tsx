@@ -73,6 +73,37 @@ describe('quadro', () => {
     expect(screen.queryByText('Carla')).not.toBeInTheDocument()
   })
 
+  // Sem isto o quadro não tem caminho para a conversa: acha-se o card e
+  // redigita-se o número em Mensagens. O design pede que cada card leve ao
+  // `/mensagens/{numero}` dela.
+  it('cada card leva à conversa do número dele', () => {
+    render(<Quadro etapas={etapas} linhas={linhas} />)
+
+    expect(screen.getByRole('link', { name: /Matheus/ })).toHaveAttribute(
+      'href',
+      '/mensagens/556584038479',
+    )
+    expect(screen.getByRole('link', { name: /Ana/ })).toHaveAttribute(
+      'href',
+      '/mensagens/5511999998888',
+    )
+  })
+
+  // O link mora no corpo do card e os ouvintes do arraste, na alça. Se um dia
+  // eles migrarem para o card inteiro, clicar no link viraria começo de
+  // arraste e abrir a conversa ficaria impossível no toque.
+  it('o alvo do arraste é a alça, não o link do card', () => {
+    render(<Quadro etapas={etapas} linhas={linhas} />)
+
+    expect(screen.getByRole('link', { name: /Matheus/ })).not.toHaveAttribute(
+      'aria-roledescription',
+    )
+    expect(screen.getByRole('button', { name: 'Mover Matheus' })).toHaveAttribute(
+      'aria-roledescription',
+      'sortable',
+    )
+  })
+
   // A alça é o que torna o arraste alcançável por teclado; sem nome
   // acessível, quem usa leitor de tela não sabe qual card vai mover.
   it('dá a cada card uma alça de arrastar com nome', () => {
@@ -104,6 +135,29 @@ describe('busca', () => {
     render(<Quadro etapas={etapas} linhas={linhas} />)
 
     await userEvent.type(screen.getByRole('searchbox', { name: /Buscar/ }), '5565984038479')
+
+    expect(screen.getByText('Matheus')).toBeInTheDocument()
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument()
+  })
+
+  // O jeito natural de digitar um celular brasileiro: DDD, o nono dígito e o
+  // número. A conversa está gravada sem o nono (é a forma que o WhatsApp
+  // devolve), e canonizar o termo digitado não ajudava — `chaveDoNumero` só
+  // tira o nono de um número completo de 13 dígitos.
+  it('acha por DDD + nono dígito, sem o código do país', async () => {
+    render(<Quadro etapas={etapas} linhas={linhas} />)
+
+    await userEvent.type(screen.getByRole('searchbox', { name: /Buscar/ }), '65984038479')
+
+    expect(screen.getByText('Matheus')).toBeInTheDocument()
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument()
+  })
+
+  // E o pedaço que mais se digita: só o número, com o nono na frente.
+  it('acha só pelo número com o nono dígito', async () => {
+    render(<Quadro etapas={etapas} linhas={linhas} />)
+
+    await userEvent.type(screen.getByRole('searchbox', { name: /Buscar/ }), '984038479')
 
     expect(screen.getByText('Matheus')).toBeInTheDocument()
     expect(screen.queryByText('Ana')).not.toBeInTheDocument()
